@@ -628,13 +628,18 @@ bool CovarianceImpl::ComputeCovarianceValuesUsingSuiteSparseQR() {
   // more efficient, both in runtime as well as the quality of
   // ordering computed. So, it maybe worth doing that analysis
   // separately.
-  const SuiteSparse_long rank = SuiteSparseQR<double>(SPQR_ORDERING_BESTAMD,
-                                                      SPQR_DEFAULT_TOL,
-                                                      cholmod_jacobian.ncol,
-                                                      &cholmod_jacobian,
-                                                      &R,
-                                                      &permutation,
-                                                      &cc);
+  const SuiteSparse_long rank =
+      SuiteSparseQR<double>(SPQR_ORDERING_BESTAMD,
+                            SPQR_DEFAULT_TOL,
+#if SUITESPARSE_MAIN_VERSION >= 6
+                            (int64_t)cholmod_jacobian.ncol,
+#else
+                            cholmod_jacobian.ncol,
+#endif  // SUITESPARSE_MAIN_VERSION > 6
+                            &cholmod_jacobian,
+                            &R,
+                            &permutation,
+                            &cc);
   event_logger.AddEvent("Numeric Factorization");
   if (R == nullptr) {
     LOG(ERROR) << "Something is wrong. SuiteSparseQR returned R = nullptr.";
