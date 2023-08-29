@@ -125,7 +125,7 @@ void OrderingForSparseNormalCholeskyUsingSuiteSparse(
   LOG(FATAL) << "Congratulations, you found a Ceres bug! "
              << "Please report this error to the developers.";
 #else
-  SuiteSparse ss;
+  SuiteSparse ss(false);
   cholmod_sparse* block_jacobian_transpose = ss.CreateSparseMatrix(
       const_cast<TripletSparseMatrix*>(&tsm_block_jacobian_transpose));
 
@@ -343,7 +343,7 @@ static void ReorderSchurComplementColumnsUsingSuiteSparse(
   (void)parameter_block_ordering;
   (void)program;
 #else
-  SuiteSparse ss;
+  SuiteSparse ss(false);
   std::vector<int> constraints;
   std::vector<ParameterBlock*>& parameter_blocks =
       *(program->mutable_parameter_blocks());
