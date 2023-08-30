@@ -157,7 +157,7 @@ cholmod_sparse* CholmodSparseView::SparsePtr() { return &m_; }
 SuiteSparse::SuiteSparse(bool use_gpu) : use_gpu_(use_gpu) {
   if (use_gpu_) {
     cholmod_l_start(&cc_);
-    cc_.useGPU = true;
+    cc_.useGPU = 1;
     cc_.supernodal = CHOLMOD_SUPERNODAL;
   } else {
     cholmod_start(&cc_);
