@@ -145,8 +145,8 @@ CholmodSparseView::CholmodSparseView(CompressedRowSparseMatrix* A,
 
 CholmodSparseView::~CholmodSparseView() {
   if (use_gpu_) {
-    cholmod_l_free(m_.nrow, sizeof(int64_t), m_.p, cc_);
-    cholmod_l_free(m_.ncol, sizeof(int64_t), m_.i, cc_);
+    cholmod_l_free(m_.ncol + 1, sizeof(int64_t), m_.p, cc_);
+    cholmod_l_free(m_.nzmax, sizeof(int64_t), m_.i, cc_);
   }
 }
 
@@ -195,8 +195,8 @@ cholmod_sparse* SuiteSparse::CreateSparseMatrix(TripletSparseMatrix* A) {
     cholmod_sparse* sparse =
         cholmod_l_triplet_to_sparse(&triplet, triplet.nnz, &cc_);
 
-    cholmod_l_free(triplet.nrow, sizeof(int64_t), triplet.i, &cc_);
-    cholmod_l_free(triplet.ncol, sizeof(int64_t), triplet.j, &cc_);
+    cholmod_l_free(triplet.nnz, sizeof(int64_t), triplet.i, &cc_);
+    cholmod_l_free(triplet.nnz, sizeof(int64_t), triplet.j, &cc_);
 
     return sparse;
   } else {
@@ -243,8 +243,8 @@ cholmod_sparse* SuiteSparse::CreateSparseMatrixTranspose(
     cholmod_sparse* sparse =
         cholmod_l_triplet_to_sparse(&triplet, triplet.nnz, &cc_);
 
-    cholmod_l_free(triplet.nrow, sizeof(int64_t), triplet.j, &cc_);
-    cholmod_l_free(triplet.ncol, sizeof(int64_t), triplet.i, &cc_);
+    cholmod_l_free(triplet.nnz, sizeof(int64_t), triplet.j, &cc_);
+    cholmod_l_free(triplet.nnz, sizeof(int64_t), triplet.i, &cc_);
 
     return sparse;
   } else {
