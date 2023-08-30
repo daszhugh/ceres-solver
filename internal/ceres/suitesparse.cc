@@ -670,7 +670,7 @@ LinearSolverTerminationType SuiteSparseCholesky::Factorize(
 
   CholmodSparseView view = ss_.CreateSparseMatrixTransposeView(lhs);
 
-  cholmod_sparse cholmod_lhs = view.SparseRef();
+  cholmod_sparse &cholmod_lhs = view.SparseRef();
 
   // If a factorization does not exist, compute the symbolic
   // factorization first.
