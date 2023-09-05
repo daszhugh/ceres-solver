@@ -653,7 +653,7 @@ std::unique_ptr<SparseCholesky> SuiteSparseCholesky::Create(
 }
 
 SuiteSparseCholesky::SuiteSparseCholesky(const OrderingType ordering_type)
-    : ordering_type_(ordering_type), ss_(true), factor_(nullptr) {}
+    : ordering_type_(ordering_type), ss_(false), factor_(nullptr) {}
 
 SuiteSparseCholesky::~SuiteSparseCholesky() {
   if (factor_ != nullptr) {
