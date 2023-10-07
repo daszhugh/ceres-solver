@@ -28,8 +28,12 @@
 //
 // Author: sameeragarwal@google.com (Sameer Agarwal)
 //
-// This example fits the curve f(x;m,c) = e^(m * x + c) to data, minimizing the
-// sum squared loss.
+// This example is a variant of curve_fitting.cc where we use an
+// IterationCallback to implement custom logging which prints out the values of
+// the parameter blocks as they evolve over the course of the optimization. This
+// also requires the use of Solver::Options::update_state_every_iteration.
+
+#include <iostream>
 
 #include "ceres/ceres.h"
 #include "glog/logging.h"
@@ -118,17 +122,37 @@ const double data[] = {
 // clang-format on
 
 struct ExponentialResidual {
-  ExponentialResidual(double x, double y) : x_(x), y_(y) {}
+  ExponentialResidual(double x, double y) : x(x), y(y) {}
 
   template <typename T>
   bool operator()(const T* const m, const T* const c, T* residual) const {
-    residual[0] = y_ - exp(m[0] * x_ + c[0]);
+    residual[0] = y - exp(m[0] * x + c[0]);
     return true;
   }
 
  private:
-  const double x_;
-  const double y_;
+  const double x;
+  const double y;
+};
+
+// MyIterationCallback prints the iteration number, the cost and the value of
+// the parameter blocks every iteration.
+class MyIterationCallback : public ceres::IterationCallback {
+ public:
+  MyIterationCallback(const double* m, const double* c) : m_(m), c_(c) {}
+
+  ~MyIterationCallback() override = default;
+
+  ceres::CallbackReturnType operator()(
+      const ceres::IterationSummary& summary) final {
+    std::cout << "Iteration: " << summary.iteration << " cost: " << summary.cost
+              << " m: " << *m_ << " c: " << *c_ << std::endl;
+    return ceres::SOLVER_CONTINUE;
+  }
+
+ private:
+  const double* m_ = nullptr;
+  const double* c_ = nullptr;
 };
 
 int main(int argc, char** argv) {
@@ -136,6 +160,7 @@ int main(int argc, char** argv) {
 
   const double initial_m = 0.0;
   const double initial_c = 0.0;
+
   double m = initial_m;
   double c = initial_c;
 
@@ -152,7 +177,18 @@ int main(int argc, char** argv) {
   ceres::Solver::Options options;
   options.max_num_iterations = 25;
   options.linear_solver_type = ceres::DENSE_QR;
-  options.minimizer_progress_to_stdout = true;
+
+  // Turn off the default logging from Ceres so that it does not interfere with
+  // MyIterationCallback.
+  options.minimizer_progress_to_stdout = false;
+
+  MyIterationCallback callback(&m, &c);
+  options.callbacks.push_back(&callback);
+
+  // Tell Ceres to update the value of the parameter blocks on each each
+  // iteration (successful or not) so that MyIterationCallback will be able to
+  // see them when called.
+  options.update_state_every_iteration = true;
 
   ceres::Solver::Summary summary;
   ceres::Solve(options, &problem, &summary);

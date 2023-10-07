@@ -35,8 +35,9 @@
 //
 // This file is generated using generate_bundle_adjustment_tests.py.
 
+#include "ceres/bundle_adjustment_test_util.h"
 #include "ceres/internal/config.h"
-#include "bundle_adjustment_test_util.h"
+#include "gtest/gtest.h"
 
 namespace ceres::internal {
 
@@ -44,6 +45,7 @@ TEST_F(BundleAdjustmentTest,
        DenseSchur_Eigen_AutomaticOrdering_Threads) {  // NOLINT
   BundleAdjustmentProblem bundle_adjustment_problem;
   Solver::Options* options = bundle_adjustment_problem.mutable_solver_options();
+  options->eta = 0.01;
   options->num_threads = 4;
   options->linear_solver_type = DENSE_SCHUR;
   options->dense_linear_algebra_library_type = EIGEN;

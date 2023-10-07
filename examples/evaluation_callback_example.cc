@@ -28,9 +28,25 @@
 //
 // Author: sameeragarwal@google.com (Sameer Agarwal)
 //
-// This example fits the curve f(x;m,c) = e^(m * x + c) to data, minimizing the
-// sum squared loss.
+// This example illustrates the use of the EvaluationCallback, which can be used
+// to perform high performance computation of the residual and Jacobians outside
+// Ceres (in this case using Eigen's vectorized code) and then the CostFunctions
+// just copy these computed residuals and Jacobians appropriately and pass them
+// to Ceres Solver.
+//
+// The results of running this example should be identical to the results
+// obtained by running curve_fitting.cc. The only difference between the two
+// examples is how the residuals and Jacobians are computed.
+//
+// The observant reader will note that both here and curve_fitting.cc instead of
+// creating one ResidualBlock for each observation one can just do one
+// ResidualBlock/CostFunction for the entire problem. The reason for keeping one
+// residual per observation is that it is what is needed if and when we need to
+// introduce a loss function which is what we do in robust_curve_fitting.cc
 
+#include <iostream>
+
+#include "Eigen/Core"
 #include "ceres/ceres.h"
 #include "glog/logging.h"
 
@@ -117,18 +133,94 @@ const double data[] = {
 };
 // clang-format on
 
-struct ExponentialResidual {
-  ExponentialResidual(double x, double y) : x_(x), y_(y) {}
+// This implementation of the EvaluationCallback interface also stores the
+// residuals and Jacobians that the CostFunction copies their values from.
+class MyEvaluationCallback : public ceres::EvaluationCallback {
+ public:
+  // m and c are passed by reference so that we have access to their values as
+  // they evolve over time through the course of optimization.
+  MyEvaluationCallback(const double& m, const double& c) : m_(m), c_(c) {
+    x_ = Eigen::VectorXd::Zero(kNumObservations);
+    y_ = Eigen::VectorXd::Zero(kNumObservations);
+    residuals_ = Eigen::VectorXd::Zero(kNumObservations);
+    jacobians_ = Eigen::MatrixXd::Zero(kNumObservations, 2);
+    for (int i = 0; i < kNumObservations; ++i) {
+      x_[i] = data[2 * i];
+      y_[i] = data[2 * i + 1];
+    }
+    PrepareForEvaluation(true, true);
+  }
 
-  template <typename T>
-  bool operator()(const T* const m, const T* const c, T* residual) const {
-    residual[0] = y_ - exp(m[0] * x_ + c[0]);
+  void PrepareForEvaluation(bool evaluate_jacobians,
+                            bool new_evaluation_point) final {
+    if (new_evaluation_point) {
+      ComputeResidualAndJacobian(evaluate_jacobians);
+      jacobians_are_stale_ = !evaluate_jacobians;
+    } else {
+      if (evaluate_jacobians && jacobians_are_stale_) {
+        ComputeResidualAndJacobian(evaluate_jacobians);
+        jacobians_are_stale_ = false;
+      }
+    }
+  }
+
+  const Eigen::VectorXd& residuals() const { return residuals_; }
+  const Eigen::MatrixXd& jacobians() const { return jacobians_; }
+  bool jacobians_are_stale() const { return jacobians_are_stale_; }
+
+ private:
+  void ComputeResidualAndJacobian(bool evaluate_jacobians) {
+    residuals_ = -(m_ * x_.array() + c_).exp();
+    if (evaluate_jacobians) {
+      jacobians_.col(0) = residuals_.array() * x_.array();
+      jacobians_.col(1) = residuals_;
+    }
+    residuals_ += y_;
+  }
+
+  const double& m_;
+  const double& c_;
+  Eigen::VectorXd x_;
+  Eigen::VectorXd y_;
+  Eigen::VectorXd residuals_;
+  Eigen::MatrixXd jacobians_;
+
+  // jacobians_are_stale_ keeps track of whether the jacobian matrix matches the
+  // residuals or not, we only compute it if we know that Solver is going to
+  // need access to it.
+  bool jacobians_are_stale_ = true;
+};
+
+// As the name implies this CostFunction does not do any computation, it just
+// copies the appropriate residual and Jacobian from the matrices stored in
+// MyEvaluationCallback.
+class CostAndJacobianCopyingCostFunction
+    : public ceres::SizedCostFunction<1, 1, 1> {
+ public:
+  CostAndJacobianCopyingCostFunction(
+      int index, const MyEvaluationCallback& evaluation_callback)
+      : index_(index), evaluation_callback_(evaluation_callback) {}
+  ~CostAndJacobianCopyingCostFunction() override = default;
+
+  bool Evaluate(double const* const* parameters,
+                double* residuals,
+                double** jacobians) const final {
+    residuals[0] = evaluation_callback_.residuals()(index_);
+    if (!jacobians) return true;
+
+    // Ensure that we are not using stale Jacobians.
+    CHECK(!evaluation_callback_.jacobians_are_stale());
+
+    if (jacobians[0] != nullptr)
+      jacobians[0][0] = evaluation_callback_.jacobians()(index_, 0);
+    if (jacobians[1] != nullptr)
+      jacobians[1][0] = evaluation_callback_.jacobians()(index_, 1);
     return true;
   }
 
  private:
-  const double x_;
-  const double y_;
+  int index_ = -1;
+  const MyEvaluationCallback& evaluation_callback_;
 };
 
 int main(int argc, char** argv) {
@@ -139,11 +231,13 @@ int main(int argc, char** argv) {
   double m = initial_m;
   double c = initial_c;
 
-  ceres::Problem problem;
+  MyEvaluationCallback evaluation_callback(m, c);
+  ceres::Problem::Options problem_options;
+  problem_options.evaluation_callback = &evaluation_callback;
+  ceres::Problem problem(problem_options);
   for (int i = 0; i < kNumObservations; ++i) {
     problem.AddResidualBlock(
-        new ceres::AutoDiffCostFunction<ExponentialResidual, 1, 1, 1>(
-            new ExponentialResidual(data[2 * i], data[2 * i + 1])),
+        new CostAndJacobianCopyingCostFunction(i, evaluation_callback),
         nullptr,
         &m,
         &c);

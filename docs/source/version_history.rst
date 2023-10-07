@@ -50,7 +50,18 @@ Backward Incompatible API Changes
 
 Bug Fixes & Minor Changes
 -------------------------
-
+#. Fix handling of M_PI for MSVC (Sergiu Deitsch)
+#. Add a default value for Solver::Summary::linear_solver_ordering_type (Sameer Agarwal)
+#. Make sure that the code compiles well with CUDA 11 (Dmitriy
+   Korchemkin)
+#. Rework MSVC warning suppression (Sergiu Deitsch)
+#. Add an example for EvaluationCallback (Sameer Agarwal)
+#. Add an example for IterationCallback (Sameer Agarwal)
+#. Add end-to-end BA tests for SCHUR_POWER_SERIES_EXPANSION (Sameer Agarwal)
+#. Update documentation for linear solvers (Sameer Agarwal)
+#. Add an accessor for the CostFunctor in DynamicAutoDiffCostFunction (Sameer Agarwal)
+#. Runtime check for cudaMallocAsync support (Dmitriy Korchemkin)
+#. Remove cuda-memcheck based tests (Sameer Agarwal)
 #. Modernize ``Sphinx`` related CMake handling as well the ``Sphinx``
    build process in the terminal. (Sergiu Deitsch)
 #. Fix macos ``sprintf`` security related warnings (Sergiu Deitsch)
