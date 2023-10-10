@@ -30,6 +30,7 @@
 
 #include "ceres/parallel_for.h"
 
+#include <atomic>
 #include <cmath>
 #include <condition_variable>
 #include <mutex>
@@ -91,6 +92,29 @@ TEST(ParallelForWithRange, NumThreads) {
           for (int i = start; i < end; ++i) values[i] = std::sqrt(i);
         });
     EXPECT_THAT(values, ElementsAreArray(expected_results));
+  }
+}
+
+// Tests parallel for loop with ranges and lower bound on minimal range size
+TEST(ParallelForWithRange, MinimalSize) {
+  ContextImpl context;
+  constexpr int kNumThreads = 4;
+  constexpr int kMinBlockSize = 5;
+  context.EnsureMinimumThreads(kNumThreads);
+
+  for (int size = kMinBlockSize; size <= 25; ++size) {
+    std::atomic<bool> failed(false);
+    ParallelFor(
+        &context,
+        0,
+        size,
+        kNumThreads,
+        [&failed, kMinBlockSize](std::tuple<int, int> range) {
+          auto [start, end] = range;
+          if (end - start < kMinBlockSize) failed = true;
+        },
+        kMinBlockSize);
+    EXPECT_EQ(failed, false);
   }
 }
 
