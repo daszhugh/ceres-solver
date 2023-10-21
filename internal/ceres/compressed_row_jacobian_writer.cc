@@ -1,5 +1,5 @@
 // Ceres Solver - A fast non-linear least squares minimizer
-// Copyright 2022 Google Inc. All rights reserved.
+// Copyright 2023 Google Inc. All rights reserved.
 // http://ceres-solver.org/
 //
 // Redistribution and use in source and binary forms, with or without
@@ -190,7 +190,8 @@ std::unique_ptr<SparseMatrix> CompressedRowJacobianWriter::CreateJacobian()
     }
     row_pos += num_residuals;
   }
-  CHECK_EQ(num_jacobian_nonzeros, rows[total_num_residuals]);
+  CHECK_EQ(num_jacobian_nonzeros - total_num_effective_parameters,
+           rows[total_num_residuals]);
 
   PopulateJacobianRowAndColumnBlockVectors(program_, jacobian.get());
 

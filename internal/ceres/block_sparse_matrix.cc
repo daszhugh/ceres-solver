@@ -1,5 +1,5 @@
 // Ceres Solver - A fast non-linear least squares minimizer
-// Copyright 2022 Google Inc. All rights reserved.
+// Copyright 2023 Google Inc. All rights reserved.
 // http://ceres-solver.org/
 //
 // Redistribution and use in source and binary forms, with or without
@@ -833,12 +833,11 @@ void BlockSparseMatrix::FreeValues(double*& values) {
 
 #ifndef CERES_NO_CUDA
   CHECK_EQ(cudaSuccess, cudaFreeHost(values));
+  values = nullptr;
 #else
   LOG(FATAL) << "Page locked memory requested when CUDA is not available. "
              << "This is a Ceres bug; please contact the developers!";
 #endif
-
-  values = nullptr;
 };
 
 }  // namespace ceres::internal

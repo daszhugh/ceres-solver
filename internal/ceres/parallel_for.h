@@ -1,5 +1,5 @@
 // Ceres Solver - A fast non-linear least squares minimizer
-// Copyright 2018 Google Inc. All rights reserved.
+// Copyright 2023 Google Inc. All rights reserved.
 // http://ceres-solver.org/
 //
 // Redistribution and use in source and binary forms, with or without
@@ -51,9 +51,6 @@ inline decltype(auto) MakeConditionalLock(const int num_threads,
                             : std::unique_lock<std::mutex>{m};
 }
 
-// Returns the maximum supported number of threads
-CERES_NO_EXPORT int MaxNumThreadsAvailable();
-
 // Execute the function for every element in the range [start, end) with at most
 // num_threads. It will execute all the work on the calling thread if
 // num_threads or (end - start) is equal to 1.
@@ -70,20 +67,29 @@ CERES_NO_EXPORT int MaxNumThreadsAvailable();
 // When distributing workload between threads, it is assumed that each loop
 // iteration takes approximately equal time to complete.
 template <typename F>
-void ParallelFor(
-    ContextImpl* context, int start, int end, int num_threads, F&& function) {
+void ParallelFor(ContextImpl* context,
+                 int start,
+                 int end,
+                 int num_threads,
+                 F&& function,
+                 int min_block_size = 1) {
   CHECK_GT(num_threads, 0);
   if (start >= end) {
     return;
   }
 
-  if (num_threads == 1 || end - start == 1) {
+  if (num_threads == 1 || end - start < min_block_size * 2) {
     InvokeOnSegment(0, std::make_tuple(start, end), std::forward<F>(function));
     return;
   }
 
   CHECK(context != nullptr);
-  ParallelInvoke(context, start, end, num_threads, std::forward<F>(function));
+  ParallelInvoke(context,
+                 start,
+                 end,
+                 num_threads,
+                 std::forward<F>(function),
+                 min_block_size);
 }
 
 // Execute function for every element in the range [start, end) with at most

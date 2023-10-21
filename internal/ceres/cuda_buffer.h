@@ -1,5 +1,5 @@
 // Ceres Solver - A fast non-linear least squares minimizer
-// Copyright 2022 Google Inc. All rights reserved.
+// Copyright 2023 Google Inc. All rights reserved.
 // http://ceres-solver.org/
 //
 // Redistribution and use in source and binary forms, with or without
@@ -55,6 +55,13 @@ class CudaBuffer {
   CudaBuffer(ContextImpl* context, int size) : context_(context) {
     Reserve(size);
   }
+
+  CudaBuffer(CudaBuffer&& other)
+      : data_(other.data_), size_(other.size_), context_(other.context_) {
+    other.data_ = nullptr;
+    other.size_ = 0;
+  }
+
   CudaBuffer(const CudaBuffer&) = delete;
   CudaBuffer& operator=(const CudaBuffer&) = delete;
 
