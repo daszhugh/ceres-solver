@@ -296,6 +296,11 @@ void BALProblem::Perturb(const double rotation_sigma,
   CHECK_GE(point_sigma, 0.0);
   CHECK_GE(rotation_sigma, 0.0);
   CHECK_GE(translation_sigma, 0.0);
+
+  if (point_sigma <= 0 || rotation_sigma <= 0 || translation_sigma <= 0) {
+    return;
+  }
+
   std::mt19937 prng;
   std::normal_distribution<double> point_noise_distribution(0.0, point_sigma);
   double* points = mutable_points();
