@@ -49,10 +49,11 @@ std::unique_ptr<SparseCholesky> SparseCholesky::Create(
     case SUITE_SPARSE:
 #ifndef CERES_NO_SUITESPARSE
       if (options.use_mixed_precision_solves) {
-        sparse_cholesky =
-            FloatSuiteSparseCholesky::Create(options.ordering_type);
+        sparse_cholesky = FloatSuiteSparseCholesky::Create(
+            options.ordering_type, options.use_gpu_cholesky);
       } else {
-        sparse_cholesky = SuiteSparseCholesky::Create(options.ordering_type);
+        sparse_cholesky = SuiteSparseCholesky::Create(options.ordering_type,
+                                                      options.use_gpu_cholesky);
       }
       break;
 #else

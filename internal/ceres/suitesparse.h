@@ -334,7 +334,8 @@ class CERES_NO_EXPORT SuiteSparse {
 
 class CERES_NO_EXPORT SuiteSparseCholesky final : public SparseCholesky {
  public:
-  static std::unique_ptr<SparseCholesky> Create(OrderingType ordering_type);
+  static std::unique_ptr<SparseCholesky> Create(OrderingType ordering_type,
+                                                const bool use_gpu);
 
   // SparseCholesky interface.
   ~SuiteSparseCholesky() override;
@@ -346,7 +347,8 @@ class CERES_NO_EXPORT SuiteSparseCholesky final : public SparseCholesky {
                                     std::string* message) final;
 
  private:
-  explicit SuiteSparseCholesky(const OrderingType ordering_type);
+  explicit SuiteSparseCholesky(const OrderingType ordering_type,
+                               const bool use_gpu);
 
   const OrderingType ordering_type_;
   SuiteSparse ss_;

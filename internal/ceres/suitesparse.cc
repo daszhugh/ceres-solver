@@ -42,10 +42,42 @@
 #include "ceres/linear_solver.h"
 #include "ceres/suitesparse.h"
 #include "ceres/triplet_sparse_matrix.h"
+
+// clang-format off
 #include "cholmod.h"
+#include "amd.h"
+#include "colamd.h"
+#ifndef NCAMD
+#include "camd.h"
+#include "ccolamd.h"
+#endif
+// clang-format on
 
 namespace ceres::internal {
 namespace {
+
+// halt if an error occurs
+void my_handler(int status, const char* file, int line, const char* message) {
+  printf("cholmod error: file: %s line: %d status: %d: %s\n",
+         file,
+         line,
+         status,
+         message);
+}
+
+void check_version(char* package, int ver[3], int major, int minor, int patch) {
+  printf("%s version %d.%d.%d\n", package, ver[0], ver[1], ver[2]);
+#ifndef TEST_COVERAGE
+  if (ver[0] != major || ver[1] != minor || ver[2] != patch) {
+    printf("header version differs (%d,%d,%d) from library\n",
+           major,
+           minor,
+           patch);
+    my_handler(CHOLMOD_INVALID, __FILE__, __LINE__, "version mismatch");
+  }
+#endif
+}
+
 int OrderingTypeToCHOLMODEnum(OrderingType ordering_type) {
   if (ordering_type == OrderingType::AMD) {
     return CHOLMOD_AMD;
@@ -159,6 +191,45 @@ SuiteSparse::SuiteSparse(bool use_gpu) : use_gpu_(use_gpu) {
     cholmod_l_start(&cc_);
     cc_.useGPU = 1;
     cc_.supernodal = CHOLMOD_SUPERNODAL;
+
+    int ver[3];
+    cholmod_l_version(ver);
+    check_version("cholmod",
+                  ver,
+                  CHOLMOD_MAIN_VERSION,
+                  CHOLMOD_SUB_VERSION,
+                  CHOLMOD_SUBSUB_VERSION);
+
+    SuiteSparse_version(ver);
+    check_version("SuiteSparse",
+                  ver,
+                  SUITESPARSE_MAIN_VERSION,
+                  SUITESPARSE_SUB_VERSION,
+                  SUITESPARSE_SUBSUB_VERSION);
+
+    amd_version(ver);
+    check_version(
+        "AMD", ver, AMD_MAIN_VERSION, AMD_SUB_VERSION, AMD_SUBSUB_VERSION);
+
+    colamd_version(ver);
+    check_version("COLAMD",
+                  ver,
+                  COLAMD_MAIN_VERSION,
+                  COLAMD_SUB_VERSION,
+                  COLAMD_SUBSUB_VERSION);
+
+#ifndef NCAMD
+    camd_version(ver);
+    check_version(
+        "CAMD", ver, CAMD_MAIN_VERSION, CAMD_SUB_VERSION, CAMD_SUBSUB_VERSION);
+
+    ccolamd_version(ver);
+    check_version("CCOLAMD",
+                  ver,
+                  CCOLAMD_MAIN_VERSION,
+                  CCOLAMD_SUB_VERSION,
+                  CCOLAMD_SUBSUB_VERSION);
+#endif
   } else {
     cholmod_start(&cc_);
   }
@@ -647,13 +718,14 @@ bool SuiteSparse::IsNestedDissectionAvailable() {
 }
 
 std::unique_ptr<SparseCholesky> SuiteSparseCholesky::Create(
-    const OrderingType ordering_type) {
+    const OrderingType ordering_type, const bool use_gpu) {
   return std::unique_ptr<SparseCholesky>(
-      new SuiteSparseCholesky(ordering_type));
+      new SuiteSparseCholesky(ordering_type, use_gpu));
 }
 
-SuiteSparseCholesky::SuiteSparseCholesky(const OrderingType ordering_type)
-    : ordering_type_(ordering_type), ss_(false), factor_(nullptr) {}
+SuiteSparseCholesky::SuiteSparseCholesky(const OrderingType ordering_type,
+                                         const bool use_gpu)
+    : ordering_type_(ordering_type), ss_(use_gpu), factor_(nullptr) {}
 
 SuiteSparseCholesky::~SuiteSparseCholesky() {
   if (factor_ != nullptr) {
@@ -670,7 +742,7 @@ LinearSolverTerminationType SuiteSparseCholesky::Factorize(
 
   CholmodSparseView view = ss_.CreateSparseMatrixTransposeView(lhs);
 
-  cholmod_sparse &cholmod_lhs = view.SparseRef();
+  cholmod_sparse& cholmod_lhs = view.SparseRef();
 
   // If a factorization does not exist, compute the symbolic
   // factorization first.
