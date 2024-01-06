@@ -192,44 +192,6 @@ SuiteSparse::SuiteSparse(bool use_gpu) : use_gpu_(use_gpu) {
     cc_.useGPU = 1;
     cc_.supernodal = CHOLMOD_SUPERNODAL;
 
-    int ver[3];
-    cholmod_l_version(ver);
-    check_version("cholmod",
-                  ver,
-                  CHOLMOD_MAIN_VERSION,
-                  CHOLMOD_SUB_VERSION,
-                  CHOLMOD_SUBSUB_VERSION);
-
-    SuiteSparse_version(ver);
-    check_version("SuiteSparse",
-                  ver,
-                  SUITESPARSE_MAIN_VERSION,
-                  SUITESPARSE_SUB_VERSION,
-                  SUITESPARSE_SUBSUB_VERSION);
-
-    amd_version(ver);
-    check_version(
-        "AMD", ver, AMD_MAIN_VERSION, AMD_SUB_VERSION, AMD_SUBSUB_VERSION);
-
-    colamd_version(ver);
-    check_version("COLAMD",
-                  ver,
-                  COLAMD_MAIN_VERSION,
-                  COLAMD_SUB_VERSION,
-                  COLAMD_SUBSUB_VERSION);
-
-#ifndef NCAMD
-    camd_version(ver);
-    check_version(
-        "CAMD", ver, CAMD_MAIN_VERSION, CAMD_SUB_VERSION, CAMD_SUBSUB_VERSION);
-
-    ccolamd_version(ver);
-    check_version("CCOLAMD",
-                  ver,
-                  CCOLAMD_MAIN_VERSION,
-                  CCOLAMD_SUB_VERSION,
-                  CCOLAMD_SUBSUB_VERSION);
-#endif
   } else {
     cholmod_start(&cc_);
   }
@@ -655,12 +617,16 @@ cholmod_dense* SuiteSparse::Solve(cholmod_factor* L,
     *message = "cholmod_solve failed. CHOLMOD status is not CHOLMOD_OK";
     return nullptr;
   }
-
+  cholmod_dense* x = nullptr;
   if (use_gpu_) {
-    return cholmod_l_solve(CHOLMOD_A, L, b, &cc_);
+    x = cholmod_l_solve(CHOLMOD_A, L, b, &cc_);
+    cholmod_l_gpu_stats(&cc_);
   } else {
-    return cholmod_solve(CHOLMOD_A, L, b, &cc_);
+    x = cholmod_solve(CHOLMOD_A, L, b, &cc_);
+    cholmod_gpu_stats(&cc_);
   }
+
+  return x;
 }
 
 bool SuiteSparse::Ordering(cholmod_sparse* matrix,
