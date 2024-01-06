@@ -103,7 +103,7 @@ DEFINE_string(dense_linear_algebra_library, "eigen",
 DEFINE_string(ordering_type, "amd", "Options are: amd, nesdis");
 DEFINE_string(linear_solver_ordering, "user",
               "Options are: automatic and user");
-DEFINE_bool(use_gpu_cholesky, false,
+DEFINE_bool(use_suitesparse_gpu, false,
               "Use SuiteSparse GPU based Cholesky solver");
 
 DEFINE_bool(use_quaternions, false, "If true, uses quaternions to represent "
@@ -166,7 +166,7 @@ void SetLinearSolver(Solver::Options* options) {
       StringToLinearSolverOrderingType(CERES_GET_FLAG(FLAGS_ordering_type),
                                        &options->linear_solver_ordering_type));
 
-  options->use_gpu_cholesky = CERES_GET_FLAG(FLAGS_use_gpu_cholesky);
+  options->use_suitesparse_gpu = CERES_GET_FLAG(FLAGS_use_suitesparse_gpu);
 
   options->use_explicit_schur_complement =
       CERES_GET_FLAG(FLAGS_explicit_schur_complement);

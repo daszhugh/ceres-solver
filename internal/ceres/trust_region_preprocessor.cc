@@ -193,7 +193,7 @@ bool SetupLinearSolver(PreprocessedProblem* pp) {
   }
 
   // Configure the linear solver.
-  pp->linear_solver_options.use_gpu_cholesky = options.use_gpu_cholesky;
+  pp->linear_solver_options.use_suitesparse_gpu = options.use_suitesparse_gpu;
   pp->linear_solver_options.min_num_iterations =
       options.min_linear_solver_iterations;
   pp->linear_solver_options.max_num_iterations =

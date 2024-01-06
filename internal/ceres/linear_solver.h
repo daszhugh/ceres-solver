@@ -157,7 +157,7 @@ class CERES_NO_EXPORT LinearSolver {
     OrderingType ordering_type = OrderingType::NATURAL;
 
     // Use SuiteSparse GPU based Cholesky solver.
-    bool use_gpu_cholesky = false;
+    bool use_suitesparse_gpu = false;
 
     // See solver.h for information about these flags.
     bool dynamic_sparsity = false;
