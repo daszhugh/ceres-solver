@@ -229,6 +229,7 @@ bool ApplyOrdering(const ProblemImpl::ParameterMap& parameter_map,
   std::vector<ParameterBlock*>* parameter_blocks =
       program->mutable_parameter_blocks();
   parameter_blocks->clear();
+  parameter_blocks->reserve(num_parameter_blocks);
 
   // TODO(sameeragarwal): Investigate whether this should be a set or an
   // unordered_set.
