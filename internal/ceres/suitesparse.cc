@@ -95,8 +95,8 @@ int OrderingTypeToCHOLMODEnum(OrderingType ordering_type) {
 }
 
 void CopyArrayToInt64(size_t size, const void* src, void* dst) {
-  const int32_t* src_ptr = (const int32_t*)src;
-  int64_t* dst_ptr = (int64_t*)dst;
+  const int32_t* src_ptr = reinterpret_cast<const int32_t*>(src);
+  int64_t* dst_ptr = reinterpret_cast<int64_t*>(dst);
 
   for (size_t i = 0; i < size; ++i) {
     dst_ptr[i] = src_ptr[i];
@@ -104,8 +104,8 @@ void CopyArrayToInt64(size_t size, const void* src, void* dst) {
 }
 
 void CopyArrayToInt32(size_t size, const void* src, void* dst) {
-  const int64_t* src_ptr = (const int64_t*)src;
-  int32_t* dst_ptr = (int32_t*)dst;
+  const int64_t* src_ptr = reinterpret_cast<const int64_t*>(src);
+  int32_t* dst_ptr = reinterpret_cast<int32_t*>(dst);
 
   for (size_t i = 0; i < size; ++i) {
     dst_ptr[i] = src_ptr[i];
