@@ -115,10 +115,9 @@ void CopyArrayToInt32(size_t size, const void* src, void* dst) {
 }  // namespace
 
 CholmodSparseView::CholmodSparseView(CompressedRowSparseMatrix* A,
-                                     cholmod_common* cc,
-                                     bool use_gpu)
-    : use_gpu_(use_gpu), cc_(cc) {
-  if (use_gpu) {
+                                     cholmod_common* cc)
+    : cc_(cc) {
+  if (cc_->useGPU) {
     m_.nrow = A->num_cols();
     m_.ncol = A->num_rows();
     m_.nzmax = A->num_nonzeros();
@@ -176,7 +175,7 @@ CholmodSparseView::CholmodSparseView(CompressedRowSparseMatrix* A,
 }
 
 CholmodSparseView::~CholmodSparseView() {
-  if (use_gpu_) {
+  if (cc_->useGPU) {
     cholmod_l_free(m_.ncol + 1, sizeof(int64_t), m_.p, cc_);
     cholmod_l_free(m_.nzmax, sizeof(int64_t), m_.i, cc_);
   }
@@ -186,19 +185,20 @@ cholmod_sparse& CholmodSparseView::SparseRef() { return m_; }
 
 cholmod_sparse* CholmodSparseView::SparsePtr() { return &m_; }
 
-SuiteSparse::SuiteSparse(bool use_gpu) : use_gpu_(use_gpu) {
-  if (use_gpu_) {
+SuiteSparse::SuiteSparse(bool use_gpu) {
+  if (use_gpu) {
     cholmod_l_start(&cc_);
     cc_.useGPU = 1;
     cc_.supernodal = CHOLMOD_SUPERNODAL;
 
   } else {
     cholmod_start(&cc_);
+    cc_.useGPU = 0;
   }
 }
 
 SuiteSparse::~SuiteSparse() {
-  if (use_gpu_) {
+  if (cc_.useGPU) {
     cholmod_l_finish(&cc_);
   } else {
     cholmod_finish(&cc_);
@@ -206,7 +206,7 @@ SuiteSparse::~SuiteSparse() {
 }
 
 cholmod_sparse* SuiteSparse::CreateSparseMatrix(TripletSparseMatrix* A) {
-  if (use_gpu_) {
+  if (cc_.useGPU) {
     cholmod_triplet triplet;
 
     triplet.nrow = A->num_rows();
@@ -253,7 +253,7 @@ cholmod_sparse* SuiteSparse::CreateSparseMatrix(TripletSparseMatrix* A) {
 
 cholmod_sparse* SuiteSparse::CreateSparseMatrixTranspose(
     TripletSparseMatrix* A) {
-  if (use_gpu_) {
+  if (cc_.useGPU) {
     cholmod_triplet triplet;
 
     triplet.ncol = A->num_rows();  // swap row and columns
@@ -303,7 +303,7 @@ cholmod_sparse* SuiteSparse::CreateSparseMatrixTranspose(
 
 CholmodSparseView SuiteSparse::CreateSparseMatrixTransposeView(
     CompressedRowSparseMatrix* A) {
-  return CholmodSparseView(A, &cc_, use_gpu_);
+  return CholmodSparseView(A, &cc_);
 }
 
 cholmod_dense SuiteSparse::CreateDenseVectorView(const double* x, int size) {
@@ -323,7 +323,7 @@ cholmod_dense* SuiteSparse::CreateDenseVector(const double* x,
                                               int out_size) {
   CHECK_LE(in_size, out_size);
 
-  if (use_gpu_) {
+  if (cc_.useGPU) {
     cholmod_dense* v = cholmod_l_zeros(out_size, 1, CHOLMOD_REAL, &cc_);
     if (x != nullptr) {
       memcpy(v->x, x, in_size * sizeof(*x));
@@ -352,7 +352,7 @@ cholmod_factor* SuiteSparse::AnalyzeCholesky(cholmod_sparse* A,
 
   cholmod_factor* factor = nullptr;
 
-  if (use_gpu_) {
+  if (cc_.useGPU) {
     factor = cholmod_l_analyze(A, &cc_);
   } else {
     factor = cholmod_analyze(A, &cc_);
@@ -366,7 +366,7 @@ cholmod_factor* SuiteSparse::AnalyzeCholesky(cholmod_sparse* A,
 
   CHECK(factor != nullptr);
   if (VLOG_IS_ON(2)) {
-    if (use_gpu_) {
+    if (cc_.useGPU) {
       cholmod_l_print_common(const_cast<char*>("Symbolic Analysis"), &cc_);
     } else {
       cholmod_print_common(const_cast<char*>("Symbolic Analysis"), &cc_);
@@ -531,7 +531,7 @@ cholmod_factor* SuiteSparse::BlockAnalyzeCholesky(
     const std::vector<Block>& row_blocks,
     const std::vector<Block>& col_blocks,
     std::string* message) {
-  if (use_gpu_) {
+  if (cc_.useGPU) {
     std::vector<int64_t> ordering;
     if (!BlockOrdering(A, ordering_type, row_blocks, col_blocks, &ordering)) {
       return nullptr;
@@ -561,7 +561,7 @@ LinearSolverTerminationType SuiteSparse::Cholesky(cholmod_sparse* A,
 
   cc_.quick_return_if_not_posdef = 1;
   int cholmod_status;
-  if (use_gpu_) {
+  if (cc_.useGPU) {
     cholmod_status = cholmod_l_factorize(A, L, &cc_);
   } else {
     cholmod_status = cholmod_factorize(A, L, &cc_);
@@ -618,7 +618,7 @@ cholmod_dense* SuiteSparse::Solve(cholmod_factor* L,
     return nullptr;
   }
   cholmod_dense* x = nullptr;
-  if (use_gpu_) {
+  if (cc_.useGPU) {
     x = cholmod_l_solve(CHOLMOD_A, L, b, &cc_);
     cholmod_l_gpu_stats(&cc_);
   } else {

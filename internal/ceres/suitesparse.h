@@ -58,9 +58,7 @@ class TripletSparseMatrix;
 
 class CERES_NO_EXPORT CholmodSparseView {
  public:
-  CholmodSparseView(CompressedRowSparseMatrix* A,
-                    cholmod_common* cc,
-                    bool use_gpu);
+  CholmodSparseView(CompressedRowSparseMatrix* A, cholmod_common* cc);
 
   ~CholmodSparseView();
 
@@ -69,7 +67,6 @@ class CERES_NO_EXPORT CholmodSparseView {
   cholmod_sparse* SparsePtr();
 
  private:
-  bool use_gpu_;
   cholmod_common* cc_;
 
   cholmod_sparse m_;
@@ -85,7 +82,7 @@ class CERES_NO_EXPORT SuiteSparse {
   explicit SuiteSparse(bool use_gpu);
   ~SuiteSparse();
 
-  bool UseGPU() const { return use_gpu_; }
+  bool UseGPU() const { return cc_.useGPU; }
 
   // Functions for building cholmod_sparse objects from sparse
   // matrices stored in triplet form. The matrix A is not
@@ -119,7 +116,7 @@ class CERES_NO_EXPORT SuiteSparse {
   // for symmetric scaling which scales both the rows and the columns
   // - diag(scale) * A * diag(scale).
   void Scale(cholmod_dense* scale, int mode, cholmod_sparse* A) {
-    if (use_gpu_) {
+    if (cc_.useGPU) {
       cholmod_l_scale(scale, mode, A, &cc_);
     } else {
       cholmod_scale(scale, mode, A, &cc_);
@@ -130,7 +127,7 @@ class CERES_NO_EXPORT SuiteSparse {
   // result. The matrix A is not modified.
   cholmod_sparse* AATranspose(cholmod_sparse* A) {
     cholmod_sparse* m = nullptr;
-    if (use_gpu_) {
+    if (cc_.useGPU) {
       m = cholmod_l_aat(A, nullptr, A->nrow, 1, &cc_);
     } else {
       m = cholmod_aat(A, nullptr, A->nrow, 1, &cc_);
@@ -147,7 +144,7 @@ class CERES_NO_EXPORT SuiteSparse {
                            cholmod_dense* y) {
     double alpha_[2] = {alpha, 0};
     double beta_[2] = {beta, 0};
-    if (use_gpu_) {
+    if (cc_.useGPU) {
       cholmod_l_sdmult(A, 0, alpha_, beta_, x, y, &cc_);
     } else {
       cholmod_sdmult(A, 0, alpha_, beta_, x, y, &cc_);
@@ -280,21 +277,21 @@ class CERES_NO_EXPORT SuiteSparse {
                                                    int64_t* ordering);
 
   void Free(cholmod_sparse* m) {
-    if (use_gpu_) {
+    if (cc_.useGPU) {
       cholmod_l_free_sparse(&m, &cc_);
     } else {
       cholmod_free_sparse(&m, &cc_);
     }
   }
   void Free(cholmod_dense* m) {
-    if (use_gpu_) {
+    if (cc_.useGPU) {
       cholmod_l_free_dense(&m, &cc_);
     } else {
       cholmod_free_dense(&m, &cc_);
     }
   }
   void Free(cholmod_factor* m) {
-    if (use_gpu_) {
+    if (cc_.useGPU) {
       cholmod_l_free_factor(&m, &cc_);
     } else {
       cholmod_free_factor(&m, &cc_);
@@ -302,7 +299,7 @@ class CERES_NO_EXPORT SuiteSparse {
   }
 
   void Print(cholmod_sparse* m, const std::string& name) {
-    if (use_gpu_) {
+    if (cc_.useGPU) {
       cholmod_l_print_sparse(m, const_cast<char*>(name.c_str()), &cc_);
     } else {
       cholmod_print_sparse(m, const_cast<char*>(name.c_str()), &cc_);
@@ -310,7 +307,7 @@ class CERES_NO_EXPORT SuiteSparse {
   }
 
   void Print(cholmod_dense* m, const std::string& name) {
-    if (use_gpu_) {
+    if (cc_.useGPU) {
       cholmod_l_print_dense(m, const_cast<char*>(name.c_str()), &cc_);
     } else {
       cholmod_print_dense(m, const_cast<char*>(name.c_str()), &cc_);
@@ -318,7 +315,7 @@ class CERES_NO_EXPORT SuiteSparse {
   }
 
   void Print(cholmod_triplet* m, const std::string& name) {
-    if (use_gpu_) {
+    if (cc_.useGPU) {
       cholmod_l_print_triplet(m, const_cast<char*>(name.c_str()), &cc_);
     } else {
       cholmod_print_triplet(m, const_cast<char*>(name.c_str()), &cc_);
@@ -328,7 +325,6 @@ class CERES_NO_EXPORT SuiteSparse {
   cholmod_common* mutable_cc() { return &cc_; }
 
  private:
-  bool use_gpu_;
   cholmod_common cc_;
 };
 
