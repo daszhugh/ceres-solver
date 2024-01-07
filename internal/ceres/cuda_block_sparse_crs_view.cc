@@ -41,17 +41,18 @@ CudaBlockSparseCRSView::CudaBlockSparseCRSView(const BlockSparseMatrix& bsm,
     : context_(context) {
   block_structure_ = std::make_unique<CudaBlockSparseStructure>(
       *bsm.block_structure(), context);
-  crs_matrix_ = std::make_unique<CudaSparseMatrix>(
-      bsm.num_rows(), bsm.num_cols(), bsm.num_nonzeros(), context);
+  CudaBuffer<int32_t> rows(context, bsm.num_rows() + 1);
+  CudaBuffer<int32_t> cols(context, bsm.num_nonzeros());
   FillCRSStructure(block_structure_->num_row_blocks(),
                    bsm.num_rows(),
                    block_structure_->first_cell_in_row_block(),
                    block_structure_->cells(),
                    block_structure_->row_blocks(),
                    block_structure_->col_blocks(),
-                   crs_matrix_->mutable_rows(),
-                   crs_matrix_->mutable_cols(),
-                   context->DefaultStream());
+                   rows.data(),
+                   cols.data(),
+                   context->DefaultStream(),
+                   context->is_cuda_memory_pools_supported_);
   is_crs_compatible_ = block_structure_->IsCrsCompatible();
   // if matrix is crs-compatible - we can drop block-structure and don't need
   // streamed_buffer_
@@ -63,6 +64,8 @@ CudaBlockSparseCRSView::CudaBlockSparseCRSView(const BlockSparseMatrix& bsm,
     streamed_buffer_ = std::make_unique<CudaStreamedBuffer<double>>(
         context_, kMaxTemporaryArraySize);
   }
+  crs_matrix_ = std::make_unique<CudaSparseMatrix>(
+      bsm.num_cols(), std::move(rows), std::move(cols), context);
   UpdateValues(bsm);
 }
 

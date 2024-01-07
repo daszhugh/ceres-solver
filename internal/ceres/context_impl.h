@@ -1,5 +1,5 @@
 // Ceres Solver - A fast non-linear least squares minimizer
-// Copyright 2018 Google Inc. All rights reserved.
+// Copyright 2023 Google Inc. All rights reserved.
 // http://ceres-solver.org/
 //
 // Redistribution and use in source and binary forms, with or without
@@ -134,6 +134,7 @@ class CERES_NO_EXPORT ContextImpl final : public Context {
   bool is_cuda_initialized_ = false;
   int gpu_device_id_in_use_ = -1;
   cudaDeviceProp gpu_device_properties_;
+  bool is_cuda_memory_pools_supported_ = false;
   int cuda_version_major_ = 0;
   int cuda_version_minor_ = 0;
 #endif  // CERES_NO_CUDA
