@@ -1,5 +1,5 @@
 // Ceres Solver - A fast non-linear least squares minimizer
-// Copyright 2022 Google Inc. All rights reserved.
+// Copyright 2023 Google Inc. All rights reserved.
 // http://ceres-solver.org/
 //
 // Redistribution and use in source and binary forms, with or without
@@ -178,7 +178,7 @@ BlockJacobianWriter::BlockJacobianWriter(const Evaluator::Options& options,
                                                   &jacobian_layout_storage_);
 }
 
-// Create evaluate prepareres that point directly into the final jacobian. This
+// Create evaluate preparers that point directly into the final jacobian. This
 // makes the final Write() a nop.
 std::unique_ptr<BlockEvaluatePreparer[]>
 BlockJacobianWriter::CreateEvaluatePreparers(unsigned num_threads) {
