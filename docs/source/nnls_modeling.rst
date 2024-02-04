@@ -1331,7 +1331,7 @@ consistent, the following identities must be satisfied at all points
    element.
 2. For all :math:`y` on the manifold, :math:`\boxplus(x,
    \boxminus(y,x)) = y`. This ensures that any :math:`y` can be
-   reached from math:`x`.
+   reached from :math:`x`.
 3. For all :math:`\Delta`, :math:`\boxminus(\boxplus(x, \Delta), x) =
    \Delta`. This ensures that :math:`\boxplus` is an injective
    (one-to-one) map.
@@ -1715,7 +1715,7 @@ templated ``Plus`` and ``Minus`` functions that compute:
   x_plus_delta = Plus(x, delta);
   y_minus_x    = Minus(y, x);
 
-Where, ``x``, ``y`` and ``x_plus_y`` are vectors on the manifold in
+Where, ``x``, ``y`` and ``x_plus_delta`` are vectors on the manifold in
 the ambient space (so they are ``kAmbientSize`` vectors) and
 ``delta``, ``y_minus_x`` are vectors in the tangent space (so they are
 ``kTangentSize`` vectors).
