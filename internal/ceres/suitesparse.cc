@@ -43,40 +43,8 @@
 #include "ceres/suitesparse.h"
 #include "ceres/triplet_sparse_matrix.h"
 
-// clang-format off
-#include "cholmod.h"
-#include "amd.h"
-#include "colamd.h"
-#ifndef NCAMD
-#include "camd.h"
-#include "ccolamd.h"
-#endif
-// clang-format on
-
 namespace ceres::internal {
 namespace {
-
-// halt if an error occurs
-void my_handler(int status, const char* file, int line, const char* message) {
-  printf("cholmod error: file: %s line: %d status: %d: %s\n",
-         file,
-         line,
-         status,
-         message);
-}
-
-void check_version(char* package, int ver[3], int major, int minor, int patch) {
-  printf("%s version %d.%d.%d\n", package, ver[0], ver[1], ver[2]);
-#ifndef TEST_COVERAGE
-  if (ver[0] != major || ver[1] != minor || ver[2] != patch) {
-    printf("header version differs (%d,%d,%d) from library\n",
-           major,
-           minor,
-           patch);
-    my_handler(CHOLMOD_INVALID, __FILE__, __LINE__, "version mismatch");
-  }
-#endif
-}
 
 int OrderingTypeToCHOLMODEnum(OrderingType ordering_type) {
   if (ordering_type == OrderingType::AMD) {
