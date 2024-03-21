@@ -383,11 +383,7 @@ bool Program::RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
   std::atomic<double> temp_fixed_cost(0.0);
 
   ParallelFor(
-      context,
-      0,
-      (int)const_residual_blocks.size(),
-      num_threads,
-      [&](int i) {
+      context, 0, (int)const_residual_blocks.size(), num_threads, [&](int i) {
         if (temp_abort) {
           return;
         }
@@ -409,8 +405,7 @@ bool Program::RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
         }
 
         temp_fixed_cost = temp_fixed_cost + cost;
-      },
-      num_threads * 10);
+      });
 
   if (temp_abort) {
     return false;
