@@ -82,8 +82,12 @@ bool LineSearchPreprocessor::Preprocess(const Solver::Options& options,
     return false;
   }
 
-  pp->reduced_program = program->CreateReducedProgram(
-      &pp->removed_parameter_blocks, &pp->fixed_cost, &pp->error);
+  pp->reduced_program =
+      program->CreateReducedProgram(&pp->removed_parameter_blocks,
+                                    &pp->fixed_cost,
+                                    &pp->error,
+                                    problem->context(),
+                                    options.num_threads);
 
   if (pp->reduced_program.get() == nullptr) {
     return false;

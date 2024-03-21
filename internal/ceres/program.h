@@ -152,7 +152,9 @@ class CERES_NO_EXPORT Program {
   std::unique_ptr<Program> CreateReducedProgram(
       std::vector<double*>* removed_parameter_blocks,
       double* fixed_cost,
-      std::string* error) const;
+      std::string* error,
+      ContextImpl* context,
+      int num_threads) const;
 
   // See problem.h for what these do.
   int NumParameterBlocks() const;
@@ -184,7 +186,9 @@ class CERES_NO_EXPORT Program {
   // error will contain a human readable description of the problem.
   bool RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
                          double* fixed_cost,
-                         std::string* message);
+                         std::string* message,
+                         ContextImpl* context,
+                         int num_threads);
 
   // The Program does not own the ParameterBlock or ResidualBlock objects.
   std::vector<ParameterBlock*> parameter_blocks_;

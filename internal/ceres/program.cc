@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -287,14 +288,16 @@ bool Program::IsFeasible(std::string* message) const {
 std::unique_ptr<Program> Program::CreateReducedProgram(
     std::vector<double*>* removed_parameter_blocks,
     double* fixed_cost,
-    std::string* error) const {
+    std::string* error,
+    ContextImpl* context,
+    int num_threads) const {
   CHECK(removed_parameter_blocks != nullptr);
   CHECK(fixed_cost != nullptr);
   CHECK(error != nullptr);
 
   std::unique_ptr<Program> reduced_program = std::make_unique<Program>(*this);
   if (!reduced_program->RemoveFixedBlocks(
-          removed_parameter_blocks, fixed_cost, error)) {
+          removed_parameter_blocks, fixed_cost, error, context, num_threads)) {
     return nullptr;
   }
 
@@ -304,7 +307,9 @@ std::unique_ptr<Program> Program::CreateReducedProgram(
 
 bool Program::RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
                                 double* fixed_cost,
-                                std::string* error) {
+                                std::string* error,
+                                ContextImpl* context,
+                                int num_threads) {
   CHECK(removed_parameter_blocks != nullptr);
   CHECK(fixed_cost != nullptr);
   CHECK(error != nullptr);
@@ -314,13 +319,13 @@ bool Program::RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
       std::make_unique<double[]>(MaxScratchDoublesNeededForEvaluate());
   *fixed_cost = 0.0;
 
-  bool need_to_call_prepare_for_evaluation = evaluation_callback_ != nullptr;
-
   // Mark all the parameters as unused. Abuse the index member of the
   // parameter blocks for the marking.
   for (auto* parameter_block : parameter_blocks_) {
     parameter_block->set_index(-1);
   }
+
+  std::vector<ResidualBlock*> const_residual_blocks;
 
   // Filter out residual that have all-constant parameters, and mark
   // all the parameter blocks that appear in residuals.
@@ -345,47 +350,76 @@ bool Program::RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
       continue;
     }
 
-    // This is an exceedingly rare case, where the user has residual
-    // blocks which are effectively constant but they are also
-    // performance sensitive enough to add an EvaluationCallback.
-    //
-    // In this case before we evaluate the cost of the constant
-    // residual blocks, we must call
-    // EvaluationCallback::PrepareForEvaluation(). Because this call
-    // can be costly, we only call this if we actually encounter a
-    // residual block with all constant parameter blocks.
-    //
-    // It is worth nothing that there is a minor inefficiency here,
-    // that the iteration 0 of TrustRegionMinimizer will also cause
-    // PrepareForEvaluation to be called on the same point, but with
-    // evaluate_jacobians = true. We could try and optimize this here,
-    // but given the rarity of this case, the additional complexity
-    // and long range dependency is not worth it.
-    if (need_to_call_prepare_for_evaluation) {
-      constexpr bool kNewPoint = true;
-      constexpr bool kDoNotEvaluateJacobians = false;
-      evaluation_callback_->PrepareForEvaluation(kDoNotEvaluateJacobians,
-                                                 kNewPoint);
-      need_to_call_prepare_for_evaluation = false;
-    }
-
-    // The residual is constant and will be removed, so its cost is
-    // added to the variable fixed_cost.
-    double cost = 0.0;
-    if (!residual_block->Evaluate(true,
-                                  &cost,
-                                  nullptr,
-                                  nullptr,
-                                  residual_block_evaluate_scratch.get())) {
-      *error = StringPrintf(
-          "Evaluation of the residual %d failed during "
-          "removal of fixed residual blocks.",
-          i);
-      return false;
-    }
-
-    *fixed_cost += cost;
+    const_residual_blocks.emplace_back(residual_block);
   }
+
+  std::atomic<bool> need_to_call(evaluation_callback_ != nullptr);
+  std::atomic<bool> temp_abort(false);
+  std::atomic<double> temp_fixed_cost(0.0);
+  std::mutex temp_mutex;
+
+  ParallelFor(
+      context,
+      0,
+      (int)const_residual_blocks.size(),
+      num_threads,
+      [&](int i) {
+        if (temp_abort) {
+          return;
+        }
+        auto residual_block = const_residual_blocks[i];
+
+        // This is an exceedingly rare case, where the user has residual
+        // blocks which are effectively constant but they are also
+        // performance sensitive enough to add an EvaluationCallback.
+        //
+        // In this case before we evaluate the cost of the constant
+        // residual blocks, we must call
+        // EvaluationCallback::PrepareForEvaluation(). Because this call
+        // can be costly, we only call this if we actually encounter a
+        // residual block with all constant parameter blocks.
+        //
+        // It is worth nothing that there is a minor inefficiency here,
+        // that the iteration 0 of TrustRegionMinimizer will also cause
+        // PrepareForEvaluation to be called on the same point, but with
+        // evaluate_jacobians = true. We could try and optimize this here,
+        // but given the rarity of this case, the additional complexity
+        // and long range dependency is not worth it.
+        if (need_to_call) {
+          {
+            std::unique_lock<std::mutex> temp_lock(temp_mutex);
+            constexpr bool kNewPoint = true;
+            constexpr bool kDoNotEvaluateJacobians = false;
+            evaluation_callback_->PrepareForEvaluation(kDoNotEvaluateJacobians,
+                                                       kNewPoint);
+          }
+          need_to_call = false;
+        }
+
+        // The residual is constant and will be removed, so its cost is
+        // added to the variable fixed_cost.
+        double cost = 0.0;
+        if (!residual_block->Evaluate(true,
+                                      &cost,
+                                      nullptr,
+                                      nullptr,
+                                      residual_block_evaluate_scratch.get())) {
+          *error = StringPrintf(
+              "Evaluation of the residual %d failed during "
+              "removal of fixed residual blocks.",
+              i);
+          temp_abort = true;
+        }
+
+        temp_fixed_cost = temp_fixed_cost + cost;
+      },
+      num_threads * 10);
+
+  if (temp_abort) {
+    return false;
+  }
+
+  *fixed_cost = temp_fixed_cost;
   residual_blocks_.resize(num_active_residual_blocks);
 
   // Filter out unused or fixed parameter blocks.
