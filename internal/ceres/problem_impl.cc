@@ -284,7 +284,7 @@ ResidualBlockId ProblemImpl::AddResidualBlock(
     // Check for duplicate parameter blocks.
     std::vector<double*> sorted_parameter_blocks(
         parameter_blocks, parameter_blocks + num_parameter_blocks);
-    sort(sorted_parameter_blocks.begin(), sorted_parameter_blocks.end());
+    std::sort(sorted_parameter_blocks.begin(), sorted_parameter_blocks.end());
     const bool has_duplicate_items =
         (std::adjacent_find(sorted_parameter_blocks.begin(),
                             sorted_parameter_blocks.end()) !=
