@@ -319,6 +319,8 @@ bool Program::RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
       std::make_unique<double[]>(MaxScratchDoublesNeededForEvaluate());
   *fixed_cost = 0.0;
 
+  bool need_to_call_prepare_for_evaluation = evaluation_callback_ != nullptr;
+
   // Mark all the parameters as unused. Abuse the index member of the
   // parameter blocks for the marking.
   for (auto* parameter_block : parameter_blocks_) {
@@ -350,13 +352,35 @@ bool Program::RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
       continue;
     }
 
+    // This is an exceedingly rare case, where the user has residual
+    // blocks which are effectively constant but they are also
+    // performance sensitive enough to add an EvaluationCallback.
+    //
+    // In this case before we evaluate the cost of the constant
+    // residual blocks, we must call
+    // EvaluationCallback::PrepareForEvaluation(). Because this call
+    // can be costly, we only call this if we actually encounter a
+    // residual block with all constant parameter blocks.
+    //
+    // It is worth nothing that there is a minor inefficiency here,
+    // that the iteration 0 of TrustRegionMinimizer will also cause
+    // PrepareForEvaluation to be called on the same point, but with
+    // evaluate_jacobians = true. We could try and optimize this here,
+    // but given the rarity of this case, the additional complexity
+    // and long range dependency is not worth it.
+    if (need_to_call_prepare_for_evaluation) {
+      constexpr bool kNewPoint = true;
+      constexpr bool kDoNotEvaluateJacobians = false;
+      evaluation_callback_->PrepareForEvaluation(kDoNotEvaluateJacobians,
+                                                 kNewPoint);
+      need_to_call_prepare_for_evaluation = false;
+    }
+
     const_residual_blocks.emplace_back(residual_block);
   }
 
-  std::atomic<bool> need_to_call(evaluation_callback_ != nullptr);
   std::atomic<bool> temp_abort(false);
   std::atomic<double> temp_fixed_cost(0.0);
-  std::mutex temp_mutex;
 
   ParallelFor(
       context,
@@ -368,33 +392,6 @@ bool Program::RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
           return;
         }
         auto residual_block = const_residual_blocks[i];
-
-        // This is an exceedingly rare case, where the user has residual
-        // blocks which are effectively constant but they are also
-        // performance sensitive enough to add an EvaluationCallback.
-        //
-        // In this case before we evaluate the cost of the constant
-        // residual blocks, we must call
-        // EvaluationCallback::PrepareForEvaluation(). Because this call
-        // can be costly, we only call this if we actually encounter a
-        // residual block with all constant parameter blocks.
-        //
-        // It is worth nothing that there is a minor inefficiency here,
-        // that the iteration 0 of TrustRegionMinimizer will also cause
-        // PrepareForEvaluation to be called on the same point, but with
-        // evaluate_jacobians = true. We could try and optimize this here,
-        // but given the rarity of this case, the additional complexity
-        // and long range dependency is not worth it.
-        if (need_to_call) {
-          {
-            std::unique_lock<std::mutex> temp_lock(temp_mutex);
-            constexpr bool kNewPoint = true;
-            constexpr bool kDoNotEvaluateJacobians = false;
-            evaluation_callback_->PrepareForEvaluation(kDoNotEvaluateJacobians,
-                                                       kNewPoint);
-          }
-          need_to_call = false;
-        }
 
         // The residual is constant and will be removed, so its cost is
         // added to the variable fixed_cost.
