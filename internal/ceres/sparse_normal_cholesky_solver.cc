@@ -71,7 +71,8 @@ LinearSolver::Summary SparseNormalCholeskySolver::SolveImpl(
   xref.setZero();
   rhs_.resize(num_cols);
   rhs_.setZero();
-  A->LeftMultiplyAndAccumulate(b, rhs_.data());
+  A->LeftMultiplyAndAccumulate(
+      b, rhs_.data(), options_.context, options_.num_threads);
   event_logger.AddEvent("Compute RHS");
 
   if (per_solve_options.D != nullptr) {
