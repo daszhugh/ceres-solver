@@ -314,9 +314,6 @@ bool Program::RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
   CHECK(fixed_cost != nullptr);
   CHECK(error != nullptr);
 
-  std::unique_ptr<double[]> residual_block_evaluate_scratch;
-  residual_block_evaluate_scratch =
-      std::make_unique<double[]>(MaxScratchDoublesNeededForEvaluate());
   *fixed_cost = 0.0;
 
   bool need_to_call_prepare_for_evaluation = evaluation_callback_ != nullptr;
@@ -379,15 +376,31 @@ bool Program::RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
     const_residual_blocks.emplace_back(residual_block);
   }
 
+  int max_scratch_doubles = MaxScratchDoublesNeededForEvaluate();
+  std::vector<std::unique_ptr<double[]>> residual_block_evaluate_scratchs(
+      num_threads);
+  for (int i = 0; i < num_threads; i++) {
+    auto& residual_block_evaluate_scratch = residual_block_evaluate_scratchs[i];
+    residual_block_evaluate_scratch =
+        std::make_unique<double[]>(max_scratch_doubles);
+  }
+
   std::atomic<bool> temp_abort(false);
   std::atomic<double> temp_fixed_cost(0.0);
 
   ParallelFor(
-      context, 0, (int)const_residual_blocks.size(), num_threads, [&](int i) {
+      context,
+      0,
+      (int)const_residual_blocks.size(),
+      num_threads,
+      [&](int thread_id, int i) {
         if (temp_abort) {
           return;
         }
+
         auto residual_block = const_residual_blocks[i];
+        auto& residual_block_evaluate_scratch =
+            residual_block_evaluate_scratchs[thread_id];
 
         // The residual is constant and will be removed, so its cost is
         // added to the variable fixed_cost.
