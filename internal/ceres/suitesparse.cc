@@ -80,7 +80,21 @@ void CopyArrayToInt32(size_t size, const void* src, void* dst) {
   }
 }
 
-}  // namespace
+class CholmodSparseView final {
+ public:
+  CholmodSparseView(CompressedRowSparseMatrix* A, cholmod_common* cc);
+
+  ~CholmodSparseView();
+
+  cholmod_sparse& SparseRef();
+
+  cholmod_sparse* SparsePtr();
+
+ private:
+  cholmod_common* cc_;
+
+  cholmod_sparse m_;
+};
 
 CholmodSparseView::CholmodSparseView(CompressedRowSparseMatrix* A,
                                      cholmod_common* cc)
@@ -153,12 +167,13 @@ cholmod_sparse& CholmodSparseView::SparseRef() { return m_; }
 
 cholmod_sparse* CholmodSparseView::SparsePtr() { return &m_; }
 
+}  // namespace
+
 SuiteSparse::SuiteSparse(bool use_gpu) {
   if (use_gpu) {
     cholmod_l_start(&cc_);
     cc_.useGPU = 1;
     cc_.supernodal = CHOLMOD_SUPERNODAL;
-
   } else {
     cholmod_start(&cc_);
     cc_.useGPU = 0;
@@ -269,9 +284,70 @@ cholmod_sparse* SuiteSparse::CreateSparseMatrixTranspose(
   }
 }
 
-CholmodSparseView SuiteSparse::CreateSparseMatrixTransposeView(
+cholmod_sparse SuiteSparse::CreateSparseMatrixTransposeView(
     CompressedRowSparseMatrix* A) {
-  return CholmodSparseView(A, &cc_);
+  cholmod_sparse m;
+  if (cc_.useGPU) {
+    m.nrow = A->num_cols();
+    m.ncol = A->num_rows();
+    m.nzmax = A->num_nonzeros();
+    m.nz = nullptr;
+
+    int64_t size = m.ncol + 1 + m.nzmax;
+    if (ij_.size() != size) {
+      ij_.resize(size);
+    }
+
+    m.p = ij_.data();
+    m.i = ij_.data() + m.ncol + 1;
+    CopyArrayToInt64(m.ncol + 1, A->rows(), m.p);
+    CopyArrayToInt64(m.nzmax, A->cols(), m.i);
+
+    m.x = reinterpret_cast<void*>(A->mutable_values());
+    m.z = nullptr;
+
+    if (A->storage_type() ==
+        CompressedRowSparseMatrix::StorageType::LOWER_TRIANGULAR) {
+      m.stype = 1;
+    } else if (A->storage_type() ==
+               CompressedRowSparseMatrix::StorageType::UPPER_TRIANGULAR) {
+      m.stype = -1;
+    } else {
+      m.stype = 0;
+    }
+
+    m.itype = CHOLMOD_LONG;
+    m.xtype = CHOLMOD_REAL;
+    m.dtype = CHOLMOD_DOUBLE;
+    m.sorted = 1;
+    m.packed = 1;
+  } else {
+    m.nrow = A->num_cols();
+    m.ncol = A->num_rows();
+    m.nzmax = A->num_nonzeros();
+    m.nz = nullptr;
+    m.p = reinterpret_cast<void*>(A->mutable_rows());
+    m.i = reinterpret_cast<void*>(A->mutable_cols());
+    m.x = reinterpret_cast<void*>(A->mutable_values());
+    m.z = nullptr;
+
+    if (A->storage_type() ==
+        CompressedRowSparseMatrix::StorageType::LOWER_TRIANGULAR) {
+      m.stype = 1;
+    } else if (A->storage_type() ==
+               CompressedRowSparseMatrix::StorageType::UPPER_TRIANGULAR) {
+      m.stype = -1;
+    } else {
+      m.stype = 0;
+    }
+
+    m.itype = CHOLMOD_INT;
+    m.xtype = CHOLMOD_REAL;
+    m.dtype = CHOLMOD_DOUBLE;
+    m.sorted = 1;
+    m.packed = 1;
+  }
+  return m;
 }
 
 cholmod_dense SuiteSparse::CreateDenseVectorView(const double* x, int size) {
@@ -674,9 +750,7 @@ LinearSolverTerminationType SuiteSparseCholesky::Factorize(
     return LinearSolverTerminationType::FATAL_ERROR;
   }
 
-  CholmodSparseView view = ss_.CreateSparseMatrixTransposeView(lhs);
-
-  cholmod_sparse& cholmod_lhs = view.SparseRef();
+  cholmod_sparse& cholmod_lhs = ss_.CreateSparseMatrixTransposeView(lhs);
 
   // If a factorization does not exist, compute the symbolic
   // factorization first.

@@ -199,9 +199,7 @@ DynamicSparseNormalCholeskySolver::SolveImplUsingSuiteSparse(
   SuiteSparse ss(options_.use_suitesparse_gpu);
   const int num_cols = A->num_cols();
 
-  CholmodSparseView view = ss.CreateSparseMatrixTransposeView(A);
-
-  cholmod_sparse& lhs = view.SparseRef();
+  cholmod_sparse lhs = ss.CreateSparseMatrixTransposeView(A);
   event_logger.AddEvent("Setup");
   cholmod_factor* factor =
       ss.AnalyzeCholesky(&lhs, options_.ordering_type, &summary.message);

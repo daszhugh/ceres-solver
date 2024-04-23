@@ -56,21 +56,7 @@ namespace ceres::internal {
 class CompressedRowSparseMatrix;
 class TripletSparseMatrix;
 
-class CERES_NO_EXPORT CholmodSparseView {
- public:
-  CholmodSparseView(CompressedRowSparseMatrix* A, cholmod_common* cc);
 
-  ~CholmodSparseView();
-
-  cholmod_sparse& SparseRef();
-
-  cholmod_sparse* SparsePtr();
-
- private:
-  cholmod_common* cc_;
-
-  cholmod_sparse m_;
-};
 
 // The raw CHOLMOD and SuiteSparseQR libraries have a slightly
 // cumbersome c like calling format. This object abstracts it away and
@@ -96,8 +82,7 @@ class CERES_NO_EXPORT SuiteSparse {
   // Create a cholmod_sparse wrapper around the contents of A. This is
   // a shallow object, which refers to the contents of A and does not
   // use the SuiteSparse machinery to allocate memory.
-  CholmodSparseView CreateSparseMatrixTransposeView(
-      CompressedRowSparseMatrix* A);
+  cholmod_sparse CreateSparseMatrixTransposeView(CompressedRowSparseMatrix* A);
 
   // Create a cholmod_dense vector around the contents of the array x.
   // This is a shallow object, which refers to the contents of x and
@@ -326,6 +311,7 @@ class CERES_NO_EXPORT SuiteSparse {
 
  private:
   cholmod_common cc_;
+  std::vector<int64_t> ij_;
 };
 
 class CERES_NO_EXPORT SuiteSparseCholesky final : public SparseCholesky {
