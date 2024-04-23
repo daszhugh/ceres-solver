@@ -643,8 +643,9 @@ bool ProblemImpl::Evaluate(const Problem::EvaluateOptions& evaluate_options,
         program.parameter_blocks());
 
     std::vector<ParameterBlock*> excluded_parameter_blocks;
-    sort(all_parameter_blocks.begin(), all_parameter_blocks.end());
-    sort(included_parameter_blocks.begin(), included_parameter_blocks.end());
+    std::sort(all_parameter_blocks.begin(), all_parameter_blocks.end());
+    std::sort(included_parameter_blocks.begin(),
+              included_parameter_blocks.end());
     set_difference(all_parameter_blocks.begin(),
                    all_parameter_blocks.end(),
                    included_parameter_blocks.begin(),
