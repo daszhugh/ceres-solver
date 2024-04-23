@@ -56,8 +56,6 @@ namespace ceres::internal {
 class CompressedRowSparseMatrix;
 class TripletSparseMatrix;
 
-
-
 // The raw CHOLMOD and SuiteSparseQR libraries have a slightly
 // cumbersome c like calling format. This object abstracts it away and
 // provides the user with a simpler interface. The methods here cannot
