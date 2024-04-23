@@ -750,7 +750,7 @@ LinearSolverTerminationType SuiteSparseCholesky::Factorize(
     return LinearSolverTerminationType::FATAL_ERROR;
   }
 
-  cholmod_sparse& cholmod_lhs = ss_.CreateSparseMatrixTransposeView(lhs);
+  cholmod_sparse cholmod_lhs = ss_.CreateSparseMatrixTransposeView(lhs);
 
   // If a factorization does not exist, compute the symbolic
   // factorization first.
