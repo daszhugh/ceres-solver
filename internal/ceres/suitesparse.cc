@@ -173,10 +173,11 @@ SuiteSparse::SuiteSparse(bool use_gpu) {
   if (use_gpu) {
     cholmod_l_start(&cc_);
     cc_.useGPU = 1;
-    cc_.supernodal = CHOLMOD_SUPERNODAL;
+    cc_.supernodal = CHOLMOD_AUTO;
   } else {
     cholmod_start(&cc_);
     cc_.useGPU = 0;
+    cc_.supernodal = CHOLMOD_AUTO;
   }
 }
 
