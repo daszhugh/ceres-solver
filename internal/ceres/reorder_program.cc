@@ -96,10 +96,10 @@ Eigen::SparseMatrix<int> CreateBlockJacobian(
 
   const int* rows = block_jacobian_transpose.rows();
   const int* cols = block_jacobian_transpose.cols();
-  int num_nonzeros = block_jacobian_transpose.num_nonzeros();
+  int64_t num_nonzeros = block_jacobian_transpose.num_nonzeros();
   std::vector<Triplet> triplets;
   triplets.reserve(num_nonzeros);
-  for (int i = 0; i < num_nonzeros; ++i) {
+  for (int64_t i = 0; i < num_nonzeros; ++i) {
     triplets.emplace_back(cols[i], rows[i], 1);
   }
 
