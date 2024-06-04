@@ -35,6 +35,7 @@
 
 #include <mutex>
 
+#include "absl/synchronization/mutex.h"
 #include "ceres/internal/export.h"
 
 namespace ceres::internal {
@@ -78,7 +79,7 @@ namespace ceres::internal {
 //
 //  if (cell != nullptr) {
 //     MatrixRef m(cell->values, row_stride, col_stride);
-//     std::lock_guard<std::mutex> l(&cell->m);
+//     std::lock_guard<absl::Mutex> l(&cell->m);
 //     m.block(row, col, row_block_size, col_block_size) = ...
 //  }
 
@@ -89,7 +90,7 @@ struct CERES_NO_EXPORT CellInfo {
   explicit CellInfo(double* values) : values(values) {}
 
   double* values{nullptr};
-  std::mutex m;
+  absl::Mutex m;
 };
 
 class CERES_NO_EXPORT BlockRandomAccessMatrix {

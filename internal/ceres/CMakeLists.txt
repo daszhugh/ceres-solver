@@ -37,6 +37,8 @@ list(APPEND CERES_LIBRARY_PRIVATE_DEPENDENCIES Threads::Threads)
 # Make dependency visible to the parent CMakeLists.txt
 set(Threads_DEPENDENCY "find_dependency (Threads)" PARENT_SCOPE)
 
+list(APPEND CERES_LIBRARY_PUBLIC_DEPENDENCIES absl::synchronization)
+
 # Source files that contain public symbols and live in the ceres namespaces.
 # Such symbols are expected to be marked with CERES_EXPORT and the files below
 # sorted in lexicographical order.
@@ -331,6 +333,11 @@ target_include_directories(ceres
   PRIVATE ${Ceres_SOURCE_DIR}/internal
   PUBLIC $<BUILD_INTERFACE:${Ceres_SOURCE_DIR}/include>
          $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+
+find_package(absl REQUIRED)
+if (absl_FOUND)
+  message("-- Found Abseil version ${absl_VERSION}: ${absl_DIR}")
+endif (absl_FOUND)
 
 # Eigen SparseQR generates various compiler warnings related to unused and
 # uninitialised local variables.  To avoid having to individually suppress these

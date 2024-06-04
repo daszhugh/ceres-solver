@@ -40,16 +40,17 @@
 #include "ceres/internal/export.h"
 #include "ceres/parallel_invoke.h"
 #include "ceres/partition_range_for_parallel_for.h"
+#include "absl/synchronization/mutex.h"
 #include "glog/logging.h"
 
 namespace ceres::internal {
 
-// Use a dummy mutex if num_threads = 1.
-inline decltype(auto) MakeConditionalLock(const int num_threads,
-                                          std::mutex& m) {
-  return (num_threads == 1) ? std::unique_lock<std::mutex>{}
-                            : std::unique_lock<std::mutex>{m};
-}
+//// Use a dummy mutex if num_threads = 1.
+//inline decltype(auto) MakeConditionalLock(const int num_threads,
+//                                          std::mutex& m) {
+//  return (num_threads == 1) ? std::unique_lock<std::mutex>{}
+//                            : std::unique_lock<std::mutex>{m};
+//}
 
 // Execute the function for every element in the range [start, end) with at most
 // num_threads. It will execute all the work on the calling thread if

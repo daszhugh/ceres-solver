@@ -77,15 +77,24 @@ bool BlockSparseJacobiPreconditioner::UpdateImpl(const BlockSparseMatrix& A,
                   MatrixRef m(cell_info->values, row_stride, col_stride);
                   ConstMatrixRef b(
                       values + cell.position, row_block_size, col_block_size);
-                  auto lock =
-                      MakeConditionalLock(options_.num_threads, cell_info->m);
-                  // clang-format off
-                  MatrixTransposeMatrixMultiply<Eigen::Dynamic, Eigen::Dynamic,
-                      Eigen::Dynamic,Eigen::Dynamic, 1>(
-                          values + cell.position, row_block_size,col_block_size,
-                          values + cell.position, row_block_size,col_block_size,
-                          cell_info->values,r, c,row_stride,col_stride);
-                  // clang-format on
+                  if (options_.num_threads == 1) {
+                    // clang-format off
+                    MatrixTransposeMatrixMultiply<Eigen::Dynamic, Eigen::Dynamic,
+                        Eigen::Dynamic,Eigen::Dynamic, 1>(
+                            values + cell.position, row_block_size,col_block_size,
+                            values + cell.position, row_block_size,col_block_size,
+                            cell_info->values,r, c,row_stride,col_stride);
+                    // clang-format on
+                  } else {
+                    absl::MutexLock lock(&cell_info->m);
+                    // clang-format off
+                    MatrixTransposeMatrixMultiply<Eigen::Dynamic, Eigen::Dynamic,
+                        Eigen::Dynamic,Eigen::Dynamic, 1>(
+                            values + cell.position, row_block_size,col_block_size,
+                            values + cell.position, row_block_size,col_block_size,
+                            cell_info->values,r, c,row_stride,col_stride);
+                    // clang-format on
+                  }
                 }
               });
 
@@ -148,7 +157,7 @@ BlockCRSJacobiPreconditioner::BlockCRSJacobiPreconditioner(
   // that in UpdateImpl we are able to look up the column block from the it
   // first column. To save ourselves this map we will instead spend a few extra
   // lock objects.
-  std::vector<std::mutex> locks(A.num_cols());
+  std::vector<absl::Mutex> locks(A.num_cols());
   locks_.swap(locks);
   CHECK_EQ(m_rows[A.num_cols()], m_nnz);
 }
@@ -194,9 +203,15 @@ bool BlockCRSJacobiPreconditioner::UpdateImpl(
           // MatrixTransposeMatrixMultiply, otherwise we could use it
           // here to further speed up the following expression.
           auto b = row_block.middleCols(c, col_block_size);
-          auto lock = MakeConditionalLock(options_.num_threads, locks_[col]);
-          m.noalias() += b.transpose() * b;
-          c += col_block_size;
+
+          if (options_.num_threads == 1) {
+            m.noalias() += b.transpose() * b;
+            c += col_block_size;
+          } else {
+            absl::MutexLock lock(&locks_[col]);
+            m.noalias() += b.transpose() * b;
+            c += col_block_size;
+          }
         }
       });
 

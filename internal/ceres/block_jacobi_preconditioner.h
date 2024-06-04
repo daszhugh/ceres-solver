@@ -33,6 +33,7 @@
 
 #include <memory>
 
+#include "absl/synchronization/mutex.h"
 #include "ceres/block_random_access_diagonal_matrix.h"
 #include "ceres/internal/disable_warnings.h"
 #include "ceres/internal/export.h"
@@ -93,7 +94,7 @@ class CERES_NO_EXPORT BlockCRSJacobiPreconditioner
   bool UpdateImpl(const CompressedRowSparseMatrix& A, const double* D) final;
 
   Preconditioner::Options options_;
-  std::vector<std::mutex> locks_;
+  std::vector<absl::Mutex> locks_;
   std::unique_ptr<CompressedRowSparseMatrix> m_;
 };
 

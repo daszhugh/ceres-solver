@@ -169,7 +169,7 @@ void SchurEliminator<kRowBlockSize, kEBlockSize, kFBlockSize>::Init(
   STLDeleteElements(&rhs_locks_);
   rhs_locks_.resize(num_col_blocks - num_eliminate_blocks_);
   for (int i = 0; i < num_col_blocks - num_eliminate_blocks_; ++i) {
-    rhs_locks_[i] = new std::mutex;
+    rhs_locks_[i] = new absl::Mutex;
   }
 }
 
@@ -407,13 +407,22 @@ void SchurEliminator<kRowBlockSize, kEBlockSize, kFBlockSize>::UpdateRhs(
       const int block_id = row.cells[c].block_id;
       const int block_size = bs->cols[block_id].size;
       const int block = block_id - num_eliminate_blocks_;
-      auto lock = MakeConditionalLock(num_threads_, *rhs_locks_[block]);
-      // clang-format off
-      MatrixTransposeVectorMultiply<kRowBlockSize, kFBlockSize, 1>(
-          values + row.cells[c].position,
-          row.block.size, block_size,
-          sj.data(), rhs + lhs_row_layout_[block]);
-      // clang-format on
+      if (num_threads_ == 1) {
+        // clang-format off
+        MatrixTransposeVectorMultiply<kRowBlockSize, kFBlockSize, 1>(
+            values + row.cells[c].position,
+            row.block.size, block_size,
+            sj.data(), rhs + lhs_row_layout_[block]);
+        // clang-format on
+      } else {
+        absl::MutexLock lock(rhs_locks_[block]);
+        // clang-format off
+        MatrixTransposeVectorMultiply<kRowBlockSize, kFBlockSize, 1>(
+            values + row.cells[c].position,
+            row.block.size, block_size,
+            sj.data(), rhs + lhs_row_layout_[block]);
+        // clang-format on
+      }
     }
     b_pos += row.block.size;
   }
@@ -547,14 +556,24 @@ void SchurEliminator<kRowBlockSize, kEBlockSize, kFBlockSize>::
           lhs->GetCell(block1, block2, &r, &c, &row_stride, &col_stride);
       if (cell_info != nullptr) {
         const int block2_size = bs->cols[it2->first].size;
-        auto lock = MakeConditionalLock(num_threads_, cell_info->m);
-        // clang-format off
-        MatrixMatrixMultiply
-            <kFBlockSize, kEBlockSize, kEBlockSize, kFBlockSize, -1>(
-                b1_transpose_inverse_ete, block1_size, e_block_size,
-                buffer  + it2->second, e_block_size, block2_size,
-                cell_info->values, r, c, row_stride, col_stride);
-        // clang-format on
+        if (num_threads_ == 1) {
+          // clang-format off
+          MatrixMatrixMultiply
+              <kFBlockSize, kEBlockSize, kEBlockSize, kFBlockSize, -1>(
+                  b1_transpose_inverse_ete, block1_size, e_block_size,
+                  buffer  + it2->second, e_block_size, block2_size,
+                  cell_info->values, r, c, row_stride, col_stride);
+          // clang-format on
+        } else {
+          absl::MutexLock lock(&cell_info->m);
+          // clang-format off
+          MatrixMatrixMultiply
+              <kFBlockSize, kEBlockSize, kEBlockSize, kFBlockSize, -1>(
+                  b1_transpose_inverse_ete, block1_size, e_block_size,
+                  buffer  + it2->second, e_block_size, block2_size,
+                  cell_info->values, r, c, row_stride, col_stride);
+          // clang-format on
+        }
       }
     }
   }
@@ -624,16 +643,28 @@ void SchurEliminator<kRowBlockSize, kEBlockSize, kFBlockSize>::
     CellInfo* cell_info =
         lhs->GetCell(block1, block1, &r, &c, &row_stride, &col_stride);
     if (cell_info != nullptr) {
-      auto lock = MakeConditionalLock(num_threads_, cell_info->m);
-      // This multiply currently ignores the fact that this is a
-      // symmetric outer product.
-      // clang-format off
-      MatrixTransposeMatrixMultiply
-          <Eigen::Dynamic, Eigen::Dynamic, Eigen::Dynamic, Eigen::Dynamic, 1>(
-              values + row.cells[i].position, row.block.size, block1_size,
-              values + row.cells[i].position, row.block.size, block1_size,
-              cell_info->values, r, c, row_stride, col_stride);
-      // clang-format on
+      if (num_threads_ == 1) {
+        // This multiply currently ignores the fact that this is a
+        // symmetric outer product.
+        // clang-format off
+        MatrixTransposeMatrixMultiply
+            <Eigen::Dynamic, Eigen::Dynamic, Eigen::Dynamic, Eigen::Dynamic, 1>(
+                values + row.cells[i].position, row.block.size, block1_size,
+                values + row.cells[i].position, row.block.size, block1_size,
+                cell_info->values, r, c, row_stride, col_stride);
+        // clang-format on
+      } else {
+        absl::MutexLock lock(&cell_info->m);
+        // This multiply currently ignores the fact that this is a
+        // symmetric outer product.
+        // clang-format off
+        MatrixTransposeMatrixMultiply
+            <Eigen::Dynamic, Eigen::Dynamic, Eigen::Dynamic, Eigen::Dynamic, 1>(
+                values + row.cells[i].position, row.block.size, block1_size,
+                values + row.cells[i].position, row.block.size, block1_size,
+                cell_info->values, r, c, row_stride, col_stride);
+        // clang-format on
+      }
     }
 
     for (int j = i + 1; j < row.cells.size(); ++j) {
@@ -645,14 +676,24 @@ void SchurEliminator<kRowBlockSize, kEBlockSize, kFBlockSize>::
           lhs->GetCell(block1, block2, &r, &c, &row_stride, &col_stride);
       if (cell_info != nullptr) {
         const int block2_size = bs->cols[row.cells[j].block_id].size;
-        auto lock = MakeConditionalLock(num_threads_, cell_info->m);
-        // clang-format off
-        MatrixTransposeMatrixMultiply
-            <Eigen::Dynamic, Eigen::Dynamic, Eigen::Dynamic, Eigen::Dynamic, 1>(
-                values + row.cells[i].position, row.block.size, block1_size,
-                values + row.cells[j].position, row.block.size, block2_size,
-                cell_info->values, r, c, row_stride, col_stride);
-        // clang-format on
+        if (num_threads_ == 1) {
+          // clang-format off
+          MatrixTransposeMatrixMultiply
+              <Eigen::Dynamic, Eigen::Dynamic, Eigen::Dynamic, Eigen::Dynamic, 1>(
+                  values + row.cells[i].position, row.block.size, block1_size,
+                  values + row.cells[j].position, row.block.size, block2_size,
+                  cell_info->values, r, c, row_stride, col_stride);
+          // clang-format on
+        } else {
+          absl::MutexLock lock(&cell_info->m);
+          // clang-format off
+           MatrixTransposeMatrixMultiply
+               <Eigen::Dynamic, Eigen::Dynamic, Eigen::Dynamic, Eigen::Dynamic, 1>(
+                   values + row.cells[i].position, row.block.size, block1_size,
+                   values + row.cells[j].position, row.block.size, block2_size,
+                   cell_info->values, r, c, row_stride, col_stride);
+          // clang-format on
+        }
       }
     }
   }
@@ -679,15 +720,25 @@ void SchurEliminator<kRowBlockSize, kEBlockSize, kFBlockSize>::
     CellInfo* cell_info =
         lhs->GetCell(block1, block1, &r, &c, &row_stride, &col_stride);
     if (cell_info != nullptr) {
-      auto lock = MakeConditionalLock(num_threads_, cell_info->m);
       // block += b1.transpose() * b1;
-      // clang-format off
-      MatrixTransposeMatrixMultiply
-          <kRowBlockSize, kFBlockSize, kRowBlockSize, kFBlockSize, 1>(
-          values + row.cells[i].position, row.block.size, block1_size,
-          values + row.cells[i].position, row.block.size, block1_size,
-          cell_info->values, r, c, row_stride, col_stride);
-      // clang-format on
+      if (num_threads_ == 1) {
+        // clang-format off
+        MatrixTransposeMatrixMultiply
+            <kRowBlockSize, kFBlockSize, kRowBlockSize, kFBlockSize, 1>(
+            values + row.cells[i].position, row.block.size, block1_size,
+            values + row.cells[i].position, row.block.size, block1_size,
+            cell_info->values, r, c, row_stride, col_stride);
+        // clang-format on
+      } else {
+        absl::MutexLock lock(&cell_info->m);
+        // clang-format off
+        MatrixTransposeMatrixMultiply
+            <kRowBlockSize, kFBlockSize, kRowBlockSize, kFBlockSize, 1>(
+            values + row.cells[i].position, row.block.size, block1_size,
+            values + row.cells[i].position, row.block.size, block1_size,
+            cell_info->values, r, c, row_stride, col_stride);
+        // clang-format on
+      }
     }
 
     for (int j = i + 1; j < row.cells.size(); ++j) {
@@ -700,14 +751,25 @@ void SchurEliminator<kRowBlockSize, kEBlockSize, kFBlockSize>::
           lhs->GetCell(block1, block2, &r, &c, &row_stride, &col_stride);
       if (cell_info != nullptr) {
         // block += b1.transpose() * b2;
-        auto lock = MakeConditionalLock(num_threads_, cell_info->m);
-        // clang-format off
-        MatrixTransposeMatrixMultiply
-            <kRowBlockSize, kFBlockSize, kRowBlockSize, kFBlockSize, 1>(
-                values + row.cells[i].position, row.block.size, block1_size,
-                values + row.cells[j].position, row.block.size, block2_size,
-                cell_info->values, r, c, row_stride, col_stride);
-        // clang-format on
+        if (num_threads_ == 1) {
+          // clang-format off
+          MatrixTransposeMatrixMultiply
+              <kRowBlockSize, kFBlockSize, kRowBlockSize, kFBlockSize, 1>(
+                  values + row.cells[i].position, row.block.size, block1_size,
+                  values + row.cells[j].position, row.block.size, block2_size,
+                  cell_info->values, r, c, row_stride, col_stride);
+          // clang-format on
+        } else {
+          absl::MutexLock lock(&cell_info->m);
+
+          // clang-format off
+          MatrixTransposeMatrixMultiply
+              <kRowBlockSize, kFBlockSize, kRowBlockSize, kFBlockSize, 1>(
+                  values + row.cells[i].position, row.block.size, block1_size,
+                  values + row.cells[j].position, row.block.size, block2_size,
+                  cell_info->values, r, c, row_stride, col_stride);
+          // clang-format on
+        }
       }
     }
   }

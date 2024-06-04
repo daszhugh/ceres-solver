@@ -37,6 +37,7 @@
 #include <vector>
 
 #include "Eigen/Dense"
+#include "absl/synchronization/mutex.h"
 #include "ceres/block_random_access_matrix.h"
 #include "ceres/block_sparse_matrix.h"
 #include "ceres/block_structure.h"
@@ -358,7 +359,7 @@ class CERES_NO_EXPORT SchurEliminator final : public SchurEliminatorBase {
 
   // Locks for the blocks in the right hand side of the reduced linear
   // system.
-  std::vector<std::mutex*> rhs_locks_;
+  std::vector<absl::Mutex*> rhs_locks_;
 };
 
 // SchurEliminatorForOneFBlock specializes the SchurEliminatorBase interface for
