@@ -15,16 +15,16 @@ jobs:
       fail-fast: true
       matrix:
         build_type: [Release]
-        sys: [mingw32, mingw64]
+        sys: [mingw64]
         lib: [shared, static]
         include:
-          - sys: mingw32
-            env: i686
           - sys: mingw64
             env: x86_64
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
 
     - name: Setup Dependencies
       uses: msys2/setup-msys2@v2
@@ -49,7 +49,7 @@ jobs:
 
     - name: Cache Build
       id: cache-build
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ${{env.CCACHE_DIR}}
         key: ${{runner.os}}-${{matrix.sys}}-${{matrix.env}}-${{matrix.build_type}}-${{matrix.lib}}-ccache-${{github.run_id}}
@@ -72,7 +72,7 @@ jobs:
     - name: Test
       run: |
         cd build_${{matrix.build_type}}/
-        ctest --config ${{matrix.build_type}} \
+        ctest --build-config ${{matrix.build_type}} \
               --output-on-failure \
               -j$(nproc)
 
@@ -118,22 +118,35 @@ jobs:
             marker: vc17
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Download and install CUDA toolkit
         if: matrix.gpu == 'cuda'
         run: |
-          Invoke-WebRequest https://developer.download.nvidia.com/compute/cuda/12.2.1/network_installers/cuda_12.2.1_windows_network.exe -OutFile cuda_toolkit_windows.exe
-          Start-Process -Wait -FilePath .\cuda_toolkit_windows.exe -ArgumentList "-s cusolver_dev_12.2 cusparse_dev_12.2 cublas_dev_12.2 thrust_12.2 nvcc_12.2 cudart_12.2 nvrtc_dev_12.2 visual_studio_integration_12.2"
+          Invoke-WebRequest https://developer.download.nvidia.com/compute/cuda/12.5.1/network_installers/cuda_12.5.1_windows_network.exe -OutFile cuda_toolkit_windows.exe
+          Start-Process -Wait -FilePath .\cuda_toolkit_windows.exe -ArgumentList "-s cusolver_dev_12.5 cusparse_dev_12.5 cublas_dev_12.5 thrust_12.5 nvcc_12.5 cudart_12.5 nvrtc_dev_12.5 visual_studio_integration_12.5"
           Remove-Item .\cuda_toolkit_windows.exe
-          $CUDA_PATH = "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.2"
+          $CUDA_PATH = "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5"
           echo "CUDA_PATH=$CUDA_PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "CUDA_PATH_V12_2=$CUDA_PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "CUDA_PATH_V12_5=$CUDA_PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "$CUDA_PATH/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Setup cuDSS
+        if: matrix.gpu == 'cuda'
+        run: |
+          Invoke-WebRequest https://developer.download.nvidia.com/compute/cudss/redist/libcudss/windows-x86_64/libcudss-windows-x86_64-0.3.0.9_cuda12-archive.zip -OutFile libcudss-windows-x86_64-0.3.0.9_cuda12-archive.zip
+          Expand-Archive -Path .\libcudss-windows-x86_64-0.3.0.9_cuda12-archive.zip -DestinationPath "C:/"
+          Remove-Item .\libcudss-windows-x86_64-0.3.0.9_cuda12-archive.zip
+          $CUDSS_PATH = "C:/libcudss-windows-x86_64-0.3.0.9_cuda12-archive/"
+          $CUDSS_CMAKE_CONFIG = "$CUDSS_PATH/lib/cmake/cudss/cudss-config.cmake"
+          echo "cudss_DIR=$CUDSS_PATH/lib/cmake/cudss" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "$CUDSS_PATH/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Cache gflags
         id: cache-gflags
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: gflags/
           key: ${{matrix.msvc}}-gflags-2.2.2-${{matrix.arch}}-${{matrix.build_type}}-${{matrix.lib}}
@@ -157,7 +170,7 @@ jobs:
 
       - name: Cache glog
         id: cache-glog
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: glog/
           key: ${{matrix.msvc}}-glog-0.6.0-${{matrix.arch}}-${{matrix.build_type}}-${{matrix.lib}}
@@ -182,7 +195,7 @@ jobs:
 
       - name: Cache SuiteSparse
         id: cache-suitesparse
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: suitesparse/
           key: ${{matrix.msvc}}-suitesparse-5.13.0-cmake.3-${{matrix.arch}}-${{matrix.build_type}}-${{matrix.lib}}
@@ -195,7 +208,7 @@ jobs:
 
       - name: Cache Eigen
         id: cache-eigen
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: eigen/
           key: ${{runner.os}}-eigen-3.4.0

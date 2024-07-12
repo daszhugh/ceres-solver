@@ -29,7 +29,7 @@
 # Authors: keir@google.com (Keir Mierle)
 #          alexs.mac@gmail.com (Alex Stewart)
 
-cmake_minimum_required(VERSION 3.16...3.27)
+cmake_minimum_required(VERSION 3.16...3.29)
 project(Ceres C CXX)
 
 # NOTE: The following CMake variables must be applied consistently to all
@@ -234,8 +234,29 @@ if (USE_CUDA)
         "find_dependency(CUDAToolkit ${CUDAToolkit_VERSION})")
       enable_language(CUDA)
       if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.18")
-        # Support Maxwell, Pascal, Volta, Turing, and Ampere GPUs.
-        set(CMAKE_CUDA_ARCHITECTURES "50;60;70;80")
+        # Support Maxwell GPUs (Default).
+        set(CMAKE_CUDA_ARCHITECTURES "50")
+        # Support other architectures depending on CUDA toolkit version.
+        if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "8.0")
+          # Support Pascal GPUs.
+          list(APPEND CMAKE_CUDA_ARCHITECTURES "60")
+        endif(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "8.0")
+        if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "9.0")
+          # Support Volta GPUs.
+          list(APPEND CMAKE_CUDA_ARCHITECTURES "70")
+        endif(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "9.0")
+        if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "10.0")
+          # Support Turing  GPUs.
+          list(APPEND CMAKE_CUDA_ARCHITECTURES "75")
+        endif(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "10.0")
+        if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.0")
+          # Support Ampere GPUs.
+          list(APPEND CMAKE_CUDA_ARCHITECTURES "80")
+        endif(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.0")
+        if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.8")
+          # Support Hopper GPUs.
+          list(APPEND CMAKE_CUDA_ARCHITECTURES "90")
+        endif(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.8")
         message("-- Setting CUDA Architecture to ${CMAKE_CUDA_ARCHITECTURES}")
       endif()
 
@@ -257,10 +278,21 @@ if (USE_CUDA)
     CUDA::cudart${CERES_CUDA_TARGET_SUFFIX}
     CUDA::cusolver${CERES_CUDA_TARGET_SUFFIX}
     CUDA::cusparse${CERES_CUDA_TARGET_SUFFIX})
+
+  find_package(cudss CONFIG)
+  if (cudss_FOUND)
+    set(cudss_DEPENDENCY "find_dependency(cudss ${cudss_VERSION})")
+    list(APPEND CERES_CUDA_LIBRARIES cudss${CERES_CUDA_TARGET_SUFFIX})
+  else (cudss_FOUND)
+    list(APPEND CERES_COMPILE_OPTIONS CERES_NO_CUDSS)
+    message("-- Did not find cuDSS, SPARSE_SCHUR and SPARSE_NORMAL_CHOLESKY with CUDA_SPARSE will not be available.")
+  endif (cudss_FOUND)
+
   unset (CERES_CUDA_TARGET_SUFFIX)
   set(CMAKE_CUDA_RUNTIME_LIBRARY NONE)
 else (USE_CUDA)
   message("-- Building without CUDA.")
+  list(APPEND CERES_COMPILE_OPTIONS CERES_NO_CUDSS)
   list(APPEND CERES_COMPILE_OPTIONS CERES_NO_CUDA)
 endif (USE_CUDA)
 
@@ -359,10 +391,10 @@ else()
 endif()
 
 # Ensure that the user understands they have disabled all sparse libraries.
-if (NOT SUITESPARSE AND NOT EIGENSPARSE AND NOT ACCELERATESPARSE)
+if (NOT SUITESPARSE AND NOT EIGENSPARSE AND NOT ACCELERATESPARSE AND NOT cudss_FOUND)
   message("   ===============================================================")
-  message("   Compiling without any sparse library: SuiteSparse, ")
-  message("   EigenSparse & Apple's Accelerate are all disabled or unavailable.  ")
+  message("   Compiling without any sparse library: SuiteSparse, EigenSparse")
+  message("   Apple's Accelerate & cuDSS are all disabled or unavailable.  ")
   message("   No sparse linear solvers (SPARSE_NORMAL_CHOLESKY & SPARSE_SCHUR)")
   message("   will be available when Ceres is used.")
   message("   ===============================================================")
