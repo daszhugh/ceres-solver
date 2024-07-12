@@ -30,8 +30,6 @@ jobs:
           - no-cuda
 
     steps:
-      - uses: actions/checkout@v4
-
       - name: Setup Dependencies
         run: |
           apt-get update
@@ -39,6 +37,7 @@ jobs:
             build-essential \
             ccache \
             cmake \
+            git \
             libbenchmark-dev \
             libblas-dev \
             libeigen3-dev \
@@ -49,6 +48,10 @@ jobs:
             libsuitesparse-dev \
             ninja-build \
             wget
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       # nvidia cuda toolkit + gcc combo shipped with 22.04LTS is broken
       # and is not able to compile code that uses thrust
@@ -78,6 +81,13 @@ jobs:
           apt-get update
           apt-get install -y nvidia-cuda-toolkit
           echo "CUDACXX=/usr/lib/nvidia-cuda-toolkit/bin/nvcc" >> $GITHUB_ENV
+
+      - name: Setup cuDSS
+        if: matrix.gpu == 'cuda'
+        run: |
+          wget https://developer.download.nvidia.com/compute/cudss/redist/libcudss/linux-x86_64/libcudss-linux-x86_64-0.3.0.9_cuda12-archive.tar.xz
+          tar -xf libcudss-linux-x86_64-0.3.0.9_cuda12-archive.tar.xz
+          echo "cudss_DIR=${{github.workspace}}/libcudss-linux-x86_64-0.3.0.9_cuda12-archive/lib/cmake/cudss" >> $GITHUB_ENV
 
       - name: Cache Build
         id: cache-build
@@ -111,7 +121,7 @@ jobs:
         if: matrix.gpu == 'no-cuda'
         run: |
           cd build_${{matrix.build_type}}/
-          ctest --config ${{matrix.build_type}} \
+          ctest --build-config ${{matrix.build_type}} \
                 --output-on-failure \
                 -j$(nproc)
 
