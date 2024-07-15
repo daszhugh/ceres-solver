@@ -529,7 +529,7 @@ bool ReorderProgramForSchurTypeLinearSolver(
 
     // We could call ApplyOrdering but this is cheaper and
     // simpler.
-    swap(*program->mutable_parameter_blocks(), schur_ordering);
+    std::swap(*program->mutable_parameter_blocks(), schur_ordering);
   } else {
     // The user provided an ordering with more than one elimination
     // group.
