@@ -380,6 +380,51 @@ static void ReorderSchurComplementColumnsUsingSuiteSparse(
 #endif
 }
 
+// Pre-order the columns corresponding to the Schur complement if
+// possible.
+static void ReorderSchurComplementColumnsUsingCUDASparse(
+    const ParameterBlockOrdering& parameter_block_ordering, Program* program) {
+#ifdef CERES_NO_SUITESPARSE
+  // "Void"ing values to avoid compiler warnings about unused parameters
+  (void)parameter_block_ordering;
+  (void)program;
+#else
+  SuiteSparse ss(false);
+  std::vector<int> constraints;
+  std::vector<ParameterBlock*>& parameter_blocks =
+      *(program->mutable_parameter_blocks());
+
+  for (auto* parameter_block : parameter_blocks) {
+    constraints.push_back(parameter_block_ordering.GroupId(
+        parameter_block->mutable_user_state()));
+  }
+
+  // Renumber the entries of constraints to be contiguous integers as
+  // CAMD requires that the group ids be in the range [0,
+  // parameter_blocks.size() - 1].
+  MapValuesToContiguousRange(constraints.size(), constraints.data());
+
+  // Compute a block sparse presentation of J'.
+  std::unique_ptr<TripletSparseMatrix> tsm_block_jacobian_transpose(
+      program->CreateJacobianBlockSparsityTranspose());
+
+  cholmod_sparse* block_jacobian_transpose =
+      ss.CreateSparseMatrix(tsm_block_jacobian_transpose.get());
+
+  std::vector<int> ordering(parameter_blocks.size(), 0);
+  ss.ConstrainedApproximateMinimumDegreeOrdering(
+      block_jacobian_transpose, constraints.data(), ordering.data());
+  ss.Free(block_jacobian_transpose);
+
+  const std::vector<ParameterBlock*> parameter_blocks_copy(parameter_blocks);
+  for (int i = 0; i < program->NumParameterBlocks(); ++i) {
+    parameter_blocks[i] = parameter_blocks_copy[ordering[i]];
+  }
+
+  program->SetParameterOffsetsAndIndex();
+#endif
+}
+
 static void ReorderSchurComplementColumnsUsingEigen(
     LinearSolverOrderingType ordering_type,
     const int size_of_first_elimination_group,
@@ -524,6 +569,12 @@ bool ReorderProgramForSchurTypeLinearSolver(
       // nested dissection too.
       ReorderSchurComplementColumnsUsingSuiteSparse(*parameter_block_ordering,
                                                     program);
+    } else if (sparse_linear_algebra_library_type == CUDA_SPARSE &&
+               linear_solver_ordering_type == ceres::AMD) {
+      // Preordering support for schur complement only works with AMD
+      // for now, since we are using CAMD.
+      ReorderSchurComplementColumnsUsingCUDASparse(*parameter_block_ordering,
+                                                   program);
     } else if (sparse_linear_algebra_library_type == EIGEN_SPARSE) {
       ReorderSchurComplementColumnsUsingEigen(linear_solver_ordering_type,
                                               size_of_first_elimination_group,
@@ -638,6 +689,18 @@ bool AreJacobianColumnsOrdered(
   if (sparse_linear_algebra_library_type == ceres::ACCELERATE_SPARSE) {
     // Apple's accelerate framework does not allow direct access to
     // ordering algorithms, so jacobian columns are never pre-ordered.
+    return false;
+  }
+
+  if (sparse_linear_algebra_library_type == CUDA_SPARSE) {
+    if (linear_solver_type == SPARSE_NORMAL_CHOLESKY ||
+        (linear_solver_type == CGNR && preconditioner_type == SUBSET)) {
+      return true;
+    }
+    if (linear_solver_type == SPARSE_SCHUR &&
+        linear_solver_ordering_type == ceres::AMD) {
+      return true;
+    }
     return false;
   }
 
