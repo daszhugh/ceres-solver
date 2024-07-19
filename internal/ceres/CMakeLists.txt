@@ -522,7 +522,7 @@ macro(add_dependencies_to_benchmark BENCHMARK_TARGET)
   # dependency headers which are not propagated via the ceres targets,
   # so link them explicitly.
   target_link_libraries(${BENCHMARK_TARGET}
-    PRIVATE test_util ceres_static benchmark::benchmark
+    PRIVATE ceres_static benchmark::benchmark
             ${CERES_LIBRARY_PRIVATE_DEPENDENCIES})
 endmacro()
 
