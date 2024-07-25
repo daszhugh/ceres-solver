@@ -63,6 +63,7 @@
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/log/check.h"
+#include "absl/log/flags.h"
 #include "absl/log/initialize.h"
 #include "absl/log/log.h"
 #include "bal_problem.h"
@@ -105,7 +106,7 @@ ABSL_FLAG(std::string, dense_linear_algebra_library, "eigen",
 ABSL_FLAG(std::string, ordering_type, "amd", "Options are: amd, nesdis");
 ABSL_FLAG(std::string, linear_solver_ordering, "user",
               "Options are: automatic and user");
-DEFINE_bool(use_suitesparse_gpu, false,
+ABSL_FLAG(bool,use_suitesparse_gpu, false,
               "Use SuiteSparse GPU based Cholesky solver");
 
 ABSL_FLAG(bool, use_quaternions, false, "If true, uses quaternions to represent "
@@ -168,7 +169,7 @@ void SetLinearSolver(Solver::Options* options) {
       StringToLinearSolverOrderingType(absl::GetFlag(FLAGS_ordering_type),
                                        &options->linear_solver_ordering_type));
 
-  options->use_suitesparse_gpu = CERES_GET_FLAG(FLAGS_use_suitesparse_gpu);
+  options->use_suitesparse_gpu = absl::GetFlag(FLAGS_use_suitesparse_gpu);
 
   options->use_explicit_schur_complement =
       absl::GetFlag(FLAGS_explicit_schur_complement);
@@ -385,8 +386,8 @@ void SolveProblem(const char* filename) {
 }  // namespace ceres::examples
 
 int main(int argc, char** argv) {
-  absl::InitializeLog();
   absl::ParseCommandLine(argc, argv);
+  absl::InitializeLog();
 
   if (absl::GetFlag(FLAGS_input).empty()) {
     LOG(ERROR) << "Usage: bundle_adjuster --input=bal_problem";
