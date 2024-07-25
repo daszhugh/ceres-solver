@@ -112,7 +112,7 @@ class CERES_NO_EXPORT SparseMatrix : public LinearOperator {
 
   int num_rows() const override = 0;
   int num_cols() const override = 0;
-  virtual int num_nonzeros() const = 0;
+  virtual int64_t num_nonzeros() const = 0;
 };
 
 }  // namespace ceres::internal

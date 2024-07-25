@@ -51,7 +51,7 @@ TEST(BlockRandomAccessSparseMatrix, GetCell) {
   constexpr int num_rows = 3 + 4 + 5;
 
   std::set<std::pair<int, int>> block_pairs;
-  int num_nonzeros = 0;
+  int64_t num_nonzeros = 0;
   block_pairs.emplace(0, 0);
   num_nonzeros += blocks[0].size * blocks[0].size;
 

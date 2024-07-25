@@ -407,7 +407,7 @@ bool CovarianceImpl::ComputeCovarianceSparsity(
   // Compute the number of non-zeros in the covariance matrix.  Along
   // the way flip any covariance blocks which are in the lower
   // triangular part of the matrix.
-  int num_nonzeros = 0;
+  int64_t num_nonzeros = 0;
   CovarianceBlocks covariance_blocks;
   for (const auto& block_pair : original_covariance_blocks) {
     if (constant_parameter_blocks_.count(block_pair.first) > 0 ||
@@ -550,13 +550,13 @@ bool CovarianceImpl::ComputeCovarianceValuesUsingSuiteSparseQR() {
   // Construct a compressed column form of the Jacobian.
   const int num_rows = jacobian.num_rows;
   const int num_cols = jacobian.num_cols;
-  const int num_nonzeros = jacobian.values.size();
+  const int64_t num_nonzeros = jacobian.values.size();
 
   std::vector<SuiteSparse_long> transpose_rows(num_cols + 1, 0);
   std::vector<SuiteSparse_long> transpose_cols(num_nonzeros, 0);
   std::vector<double> transpose_values(num_nonzeros, 0);
 
-  for (int idx = 0; idx < num_nonzeros; ++idx) {
+  for (int64_t idx = 0; idx < num_nonzeros; ++idx) {
     transpose_rows[jacobian.cols[idx] + 1] += 1;
   }
 
@@ -618,7 +618,11 @@ bool CovarianceImpl::ComputeCovarianceValuesUsingSuiteSparseQR() {
       SPQR_ORDERING_BESTAMD,
       options_.column_pivot_threshold < 0 ? SPQR_DEFAULT_TOL
                                           : options_.column_pivot_threshold,
+#if SUITESPARSE_MAIN_VERSION >= 6
       static_cast<int64_t>(cholmod_jacobian.ncol),
+#else
+      cholmod_jacobian.ncol,
+#endif  // SUITESPARSE_MAIN_VERSION > 6
       &cholmod_jacobian,
       &R,
       &permutation,

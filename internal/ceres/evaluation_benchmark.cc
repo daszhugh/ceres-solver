@@ -124,7 +124,7 @@ struct BALData {
       auto block_structure_sequential =
           std::make_unique<CompressedRowBlockStructure>(
               *block_sparse->block_structure());
-      int num_nonzeros = 0;
+      int64_t num_nonzeros = 0;
       for (auto& row_block : block_structure_sequential->rows) {
         const int row_block_size = row_block.block.size;
         for (auto& cell : row_block.cells) {
@@ -146,9 +146,9 @@ struct BALData {
 
     std::mt19937 rng;
     std::normal_distribution<double> rnorm;
-    const int nnz = block_sparse->num_nonzeros();
+    const int64_t nnz = block_sparse->num_nonzeros();
     auto values = block_sparse->mutable_values();
-    for (int i = 0; i < nnz; ++i) {
+    for (int64_t i = 0; i < nnz; ++i) {
       values[i] = rnorm(rng);
     }
 

@@ -64,7 +64,7 @@ BlockRandomAccessSparseMatrix::BlockRandomAccessSparseMatrix(
   block_structure_->cols = blocks;
   block_structure_->rows.resize(num_blocks);
   auto p = block_pairs.begin();
-  int num_nonzeros = 0;
+  int64_t num_nonzeros = 0;
   // Pairs of block indices are sorted lexicographically, thus pairs
   // corresponding to a single row-block are stored in segments of index pairs
   // with constant row-block index and increasing column-block index.

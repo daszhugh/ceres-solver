@@ -49,7 +49,8 @@ namespace ceres::internal {
 // SuiteSparse.
 class CERES_NO_EXPORT FloatSuiteSparseCholesky : public SparseCholesky {
  public:
-  static std::unique_ptr<SparseCholesky> Create(OrderingType ordering_type);
+  static std::unique_ptr<SparseCholesky> Create(OrderingType ordering_type,
+                                                const bool use_gpu);
 };
 
 }  // namespace ceres::internal

@@ -388,7 +388,7 @@ PartitionedMatrixView<kRowBlockSize, kEBlockSize, kFBlockSize>::
   auto* block_diagonal_structure = new CompressedRowBlockStructure;
 
   int block_position = 0;
-  int diagonal_cell_position = 0;
+  int64_t diagonal_cell_position = 0;
 
   // Iterate over the column blocks, creating a new diagonal block for
   // each column block.
@@ -457,7 +457,7 @@ void PartitionedMatrixView<kRowBlockSize, kEBlockSize, kFBlockSize>::
     const int row_block_size = bs->rows[r].block.size;
     const int block_id = cell.block_id;
     const int col_block_size = bs->cols[block_id].size;
-    const int cell_position =
+    const int64_t cell_position =
         block_diagonal_structure->rows[block_id].cells[0].position;
 
     // clang-format off
@@ -490,7 +490,7 @@ void PartitionedMatrixView<kRowBlockSize, kEBlockSize, kFBlockSize>::
        transpose_block_structure,
        values_diagonal,
        block_diagonal_structure](int col_block_id) {
-        int cell_position =
+        int64_t cell_position =
             block_diagonal_structure->rows[col_block_id].cells[0].position;
         double* cell_values = values_diagonal + cell_position;
         int col_block_size =
@@ -543,7 +543,7 @@ void PartitionedMatrixView<kRowBlockSize, kEBlockSize, kFBlockSize>::
       const int col_block_id = cells[c].block_id;
       const int col_block_size = bs->cols[col_block_id].size;
       const int diagonal_block_id = col_block_id - num_col_blocks_e_;
-      const int cell_position =
+      const int64_t cell_position =
           block_diagonal_structure->rows[diagonal_block_id].cells[0].position;
 
       // clang-format off
@@ -564,7 +564,7 @@ void PartitionedMatrixView<kRowBlockSize, kEBlockSize, kFBlockSize>::
       const int col_block_id = cell.block_id;
       const int col_block_size = bs->cols[col_block_id].size;
       const int diagonal_block_id = col_block_id - num_col_blocks_e_;
-      const int cell_position =
+      const int64_t cell_position =
           block_diagonal_structure->rows[diagonal_block_id].cells[0].position;
 
       // clang-format off
@@ -606,7 +606,7 @@ void PartitionedMatrixView<kRowBlockSize, kEBlockSize, kFBlockSize>::
         const int col_block_size =
             transpose_block_structure->rows[col_block_id].block.size;
         const int diagonal_block_id = col_block_id - num_col_blocks_e;
-        const int cell_position =
+        const int64_t cell_position =
             block_diagonal_structure->rows[diagonal_block_id].cells[0].position;
         double* cell_values = values_diagonal + cell_position;
 

@@ -39,7 +39,7 @@
 namespace ceres::internal {
 
 std::unique_ptr<SparseCholesky> FloatSuiteSparseCholesky::Create(
-    OrderingType ordering_type) {
+    OrderingType ordering_type, const bool use_gpu) {
   LOG(FATAL) << "FloatSuiteSparseCholesky is not available.";
   return {};
 }

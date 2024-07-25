@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -289,14 +290,16 @@ bool Program::IsFeasible(std::string* message) const {
 std::unique_ptr<Program> Program::CreateReducedProgram(
     std::vector<double*>* removed_parameter_blocks,
     double* fixed_cost,
-    std::string* error) const {
+    std::string* error,
+    ContextImpl* context,
+    int num_threads) const {
   CHECK(removed_parameter_blocks != nullptr);
   CHECK(fixed_cost != nullptr);
   CHECK(error != nullptr);
 
   std::unique_ptr<Program> reduced_program = std::make_unique<Program>(*this);
   if (!reduced_program->RemoveFixedBlocks(
-          removed_parameter_blocks, fixed_cost, error)) {
+          removed_parameter_blocks, fixed_cost, error, context, num_threads)) {
     return nullptr;
   }
 
@@ -306,14 +309,13 @@ std::unique_ptr<Program> Program::CreateReducedProgram(
 
 bool Program::RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
                                 double* fixed_cost,
-                                std::string* error) {
+                                std::string* error,
+                                ContextImpl* context,
+                                int num_threads) {
   CHECK(removed_parameter_blocks != nullptr);
   CHECK(fixed_cost != nullptr);
   CHECK(error != nullptr);
 
-  std::unique_ptr<double[]> residual_block_evaluate_scratch;
-  residual_block_evaluate_scratch =
-      std::make_unique<double[]>(MaxScratchDoublesNeededForEvaluate());
   *fixed_cost = 0.0;
 
   bool need_to_call_prepare_for_evaluation = evaluation_callback_ != nullptr;
@@ -323,6 +325,8 @@ bool Program::RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
   for (auto* parameter_block : parameter_blocks_) {
     parameter_block->set_index(-1);
   }
+
+  std::vector<ResidualBlock*> const_residual_blocks;
 
   // Filter out residual that have all-constant parameters, and mark
   // all the parameter blocks that appear in residuals.
@@ -371,23 +375,58 @@ bool Program::RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
       need_to_call_prepare_for_evaluation = false;
     }
 
-    // The residual is constant and will be removed, so its cost is
-    // added to the variable fixed_cost.
-    double cost = 0.0;
-    if (!residual_block->Evaluate(true,
-                                  &cost,
-                                  nullptr,
-                                  nullptr,
-                                  residual_block_evaluate_scratch.get())) {
-      *error = StringPrintf(
-          "Evaluation of the residual %d failed during "
-          "removal of fixed residual blocks.",
-          i);
-      return false;
-    }
-
-    *fixed_cost += cost;
+    const_residual_blocks.emplace_back(residual_block);
   }
+
+  int max_scratch_doubles = MaxScratchDoublesNeededForEvaluate();
+  std::vector<std::unique_ptr<double[]>> residual_block_evaluate_scratchs(
+      num_threads);
+  for (int i = 0; i < num_threads; i++) {
+    auto& residual_block_evaluate_scratch = residual_block_evaluate_scratchs[i];
+    residual_block_evaluate_scratch =
+        std::make_unique<double[]>(max_scratch_doubles);
+  }
+
+  std::atomic<bool> temp_abort(false);
+  std::atomic<double> temp_fixed_cost(0.0);
+
+  ParallelFor(
+      context,
+      0,
+      (int)const_residual_blocks.size(),
+      num_threads,
+      [&](int thread_id, int i) {
+        if (temp_abort) {
+          return;
+        }
+
+        auto residual_block = const_residual_blocks[i];
+        auto& residual_block_evaluate_scratch =
+            residual_block_evaluate_scratchs[thread_id];
+
+        // The residual is constant and will be removed, so its cost is
+        // added to the variable fixed_cost.
+        double cost = 0.0;
+        if (!residual_block->Evaluate(true,
+                                      &cost,
+                                      nullptr,
+                                      nullptr,
+                                      residual_block_evaluate_scratch.get())) {
+          *error = StringPrintf(
+              "Evaluation of the residual %d failed during "
+              "removal of fixed residual blocks.",
+              i);
+          temp_abort = true;
+        }
+
+        temp_fixed_cost = temp_fixed_cost + cost;
+      });
+
+  if (temp_abort) {
+    return false;
+  }
+
+  *fixed_cost = temp_fixed_cost;
   residual_blocks_.resize(num_active_residual_blocks);
 
   // Filter out unused or fixed parameter blocks.
@@ -441,7 +480,7 @@ Program::CreateJacobianBlockSparsityTranspose(int start_residual_block) const {
 
   std::unique_ptr<TripletSparseMatrix> tsm(
       new TripletSparseMatrix(num_rows, num_cols, 10 * num_cols));
-  int num_nonzeros = 0;
+  int64_t num_nonzeros = 0;
   int* rows = tsm->mutable_rows();
   int* cols = tsm->mutable_cols();
   double* values = tsm->mutable_values();

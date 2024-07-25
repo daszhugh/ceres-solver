@@ -209,7 +209,7 @@ TEST(CovarianceImpl, ComputeCovarianceSparsity) {
   }
 
   const int* cols = crsm->cols();
-  for (int c = 0; c < crsm->num_nonzeros(); ++c) {
+  for (int64_t c = 0; c < crsm->num_nonzeros(); ++c) {
     EXPECT_EQ(cols[c], expected_cols[c])
         << c << " " << cols[c] << " " << expected_cols[c];
   }
@@ -290,7 +290,7 @@ TEST(CovarianceImpl, ComputeCovarianceSparsityWithConstantParameterBlock) {
   }
 
   const int* cols = crsm->cols();
-  for (int c = 0; c < crsm->num_nonzeros(); ++c) {
+  for (int64_t c = 0; c < crsm->num_nonzeros(); ++c) {
     EXPECT_EQ(cols[c], expected_cols[c])
         << c << " " << cols[c] << " " << expected_cols[c];
   }
@@ -369,7 +369,7 @@ TEST(CovarianceImpl, ComputeCovarianceSparsityWithFreeParameterBlock) {
   }
 
   const int* cols = crsm->cols();
-  for (int c = 0; c < crsm->num_nonzeros(); ++c) {
+  for (int64_t c = 0; c < crsm->num_nonzeros(); ++c) {
     EXPECT_EQ(cols[c], expected_cols[c])
         << c << " " << cols[c] << " " << expected_cols[c];
   }

@@ -72,7 +72,7 @@ struct RowColLessThan {
 
 void TransposeForCompressedRowSparseStructure(const int num_rows,
                                               const int num_cols,
-                                              const int num_nonzeros,
+                                              const int64_t num_nonzeros,
                                               const int* rows,
                                               const int* cols,
                                               const double* values,
@@ -84,7 +84,7 @@ void TransposeForCompressedRowSparseStructure(const int num_rows,
 
   // Count the number of entries in each column of the original matrix
   // and assign to transpose_rows[col + 1].
-  for (int idx = 0; idx < num_nonzeros; ++idx) {
+  for (int64_t idx = 0; idx < num_nonzeros; ++idx) {
     ++transpose_rows[cols[idx] + 1];
   }
 
@@ -164,7 +164,7 @@ void AddSymmetricRandomBlock(const int num_rows,
 // This constructor gives you a semi-initialized CompressedRowSparseMatrix.
 CompressedRowSparseMatrix::CompressedRowSparseMatrix(int num_rows,
                                                      int num_cols,
-                                                     int max_num_nonzeros) {
+                                                     int64_t max_num_nonzeros) {
   num_rows_ = num_rows;
   num_cols_ = num_cols;
   storage_type_ = StorageType::UNSYMMETRIC;
@@ -207,7 +207,7 @@ CompressedRowSparseMatrix::FromTripletSparseMatrix(
 
   // index is the list of indices into the TripletSparseMatrix input.
   std::vector<int> index(input.num_nonzeros(), 0);
-  for (int i = 0; i < input.num_nonzeros(); ++i) {
+  for (int64_t i = 0; i < input.num_nonzeros(); ++i) {
     index[i] = i;
   }
 
@@ -550,7 +550,7 @@ void CompressedRowSparseMatrix::ToCRSMatrix(CRSMatrix* matrix) const {
   matrix->values.resize(matrix->rows[matrix->num_rows]);
 }
 
-void CompressedRowSparseMatrix::SetMaxNumNonZeros(int num_nonzeros) {
+void CompressedRowSparseMatrix::SetMaxNumNonZeros(int64_t num_nonzeros) {
   CHECK_GE(num_nonzeros, 0);
 
   cols_.resize(num_nonzeros);
@@ -561,7 +561,7 @@ std::unique_ptr<CompressedRowSparseMatrix>
 CompressedRowSparseMatrix::CreateBlockDiagonalMatrix(
     const double* diagonal, const std::vector<Block>& blocks) {
   const int num_rows = NumScalarEntries(blocks);
-  int num_nonzeros = 0;
+  int64_t num_nonzeros = 0;
   for (auto& block : blocks) {
     num_nonzeros += block.size * block.size;
   }

@@ -62,7 +62,7 @@ class BenchmarkData {
 
     bs->rows.resize(2 * num_e_blocks);
     int row_pos = 0;
-    int cell_pos = 0;
+    int64_t cell_pos = 0;
     for (int i = 0; i < num_e_blocks; ++i) {
       {
         auto& row = bs->rows[2 * i];

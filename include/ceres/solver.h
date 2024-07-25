@@ -516,6 +516,9 @@ class CERES_EXPORT Solver {
     // Complement (or its preconditioner).
     std::shared_ptr<ParameterBlockOrdering> linear_solver_ordering;
 
+    // Use SuiteSparse GPU based Cholesky solver.
+    bool use_suitesparse_gpu = false;
+
     // Use an explicitly computed Schur complement matrix with
     // ITERATIVE_SCHUR.
     //

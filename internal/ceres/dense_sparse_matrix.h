@@ -61,7 +61,7 @@ class CERES_NO_EXPORT DenseSparseMatrix final : public SparseMatrix {
   void ToTextFile(FILE* file) const final;
   int num_rows() const final;
   int num_cols() const final;
-  int num_nonzeros() const final;
+  int64_t num_nonzeros() const final;
   const double* values() const final { return m_.data(); }
   double* mutable_values() final { return m_.data(); }
 

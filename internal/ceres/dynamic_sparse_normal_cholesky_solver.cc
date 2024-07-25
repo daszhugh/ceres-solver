@@ -201,8 +201,9 @@ DynamicSparseNormalCholeskySolver::SolveImplUsingSuiteSparse(
   summary.num_iterations = 1;
   summary.message = "Success.";
 
-  SuiteSparse ss;
+  SuiteSparse ss(options_.use_suitesparse_gpu);
   const int num_cols = A->num_cols();
+
   cholmod_sparse lhs = ss.CreateSparseMatrixTransposeView(A);
   event_logger.AddEvent("Setup");
   cholmod_factor* factor =

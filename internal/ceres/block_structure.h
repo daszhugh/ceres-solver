@@ -65,13 +65,13 @@ inline bool operator==(const Block& left, const Block& right) noexcept {
 
 struct CERES_NO_EXPORT Cell {
   Cell() = default;
-  Cell(int block_id_, int position_) noexcept
+  Cell(int block_id_, int64_t position_) noexcept
       : block_id(block_id_), position(position_) {}
 
   // Column or row block id as the case maybe.
   int block_id{-1};
   // Where in the values array of the jacobian is this cell located.
-  int position{-1};
+  int64_t position{-1};
 };
 
 // Order cell by their block_id;

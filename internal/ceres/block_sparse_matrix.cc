@@ -70,7 +70,7 @@ std::unique_ptr<CompressedRowSparseMatrix>
 CreateStructureOfCompressedRowSparseMatrix(
     int num_rows,
     int num_cols,
-    int num_nonzeros,
+    int64_t num_nonzeros,
     const CompressedRowBlockStructure* block_structure) {
   auto crs_matrix = std::make_unique<CompressedRowSparseMatrix>(
       num_rows, num_cols, num_nonzeros);
@@ -618,7 +618,7 @@ void BlockSparseMatrix::AppendRows(const BlockSparseMatrix& m) {
   const CompressedRowBlockStructure* m_bs = m.block_structure();
   CHECK_EQ(m_bs->cols.size(), block_structure_->cols.size());
 
-  const int old_num_nonzeros = num_nonzeros_;
+  const int64_t old_num_nonzeros = num_nonzeros_;
   const int old_num_row_blocks = block_structure_->rows.size();
   block_structure_->rows.resize(old_num_row_blocks + m_bs->rows.size());
 
@@ -669,7 +669,7 @@ void BlockSparseMatrix::AppendRows(const BlockSparseMatrix& m) {
 void BlockSparseMatrix::DeleteRowBlocks(const int delta_row_blocks) {
   const int num_row_blocks = block_structure_->rows.size();
   const int new_num_row_blocks = num_row_blocks - delta_row_blocks;
-  int delta_num_nonzeros = 0;
+  int64_t delta_num_nonzeros = 0;
   int delta_num_rows = 0;
   const std::vector<Block>& column_blocks = block_structure_->cols;
   for (int i = 0; i < delta_row_blocks; ++i) {
@@ -806,7 +806,7 @@ std::unique_ptr<CompressedRowBlockStructure> CreateTranspose(
   return transpose;
 }
 
-double* BlockSparseMatrix::AllocateValues(int size) {
+double* BlockSparseMatrix::AllocateValues(int64_t size) {
   if (!use_page_locked_memory_) {
     return new double[size];
   }
