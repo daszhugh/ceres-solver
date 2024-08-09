@@ -37,6 +37,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/fixed_array.h"
 #include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
@@ -383,22 +384,22 @@ bool Program::RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
   int max_scratch_doubles = MaxScratchDoublesNeededForEvaluate();
   std::vector<std::unique_ptr<double[]>> residual_block_evaluate_scratchs(
       num_threads);
-  for (int i = 0; i < num_threads; i++) {
+  for (int i = 0; i < num_threads; ++i) {
     auto& residual_block_evaluate_scratch = residual_block_evaluate_scratchs[i];
     residual_block_evaluate_scratch =
         std::make_unique<double[]>(max_scratch_doubles);
   }
 
-  std::atomic<bool> temp_abort(false);
-  std::atomic<double> temp_fixed_cost(0.0);
-
+  absl::FixedArray<char, 8> temp_aborts(num_threads, 0);
+  absl::FixedArray<double, 8> temp_fixed_costs(num_threads, 0.0);
+  absl::FixedArray<std::string, 8> temp_errors(num_threads);
   ParallelFor(
       context,
       0,
       (int)const_residual_blocks.size(),
       num_threads,
       [&](int thread_id, int i) {
-        if (temp_abort) {
+        if (temp_aborts[thread_id] == 1) {
           return;
         }
 
@@ -414,21 +415,25 @@ bool Program::RemoveFixedBlocks(std::vector<double*>* removed_parameter_blocks,
                                       nullptr,
                                       nullptr,
                                       residual_block_evaluate_scratch.get())) {
-          *error = absl::StrFormat(
+          temp_errors[thread_id] = absl::StrFormat(
               "Evaluation of the residual %d failed during "
               "removal of fixed residual blocks.",
               i);
-          temp_abort = true;
+          temp_aborts[thread_id] = 1;
         }
 
-        temp_fixed_cost = temp_fixed_cost + cost;
+        temp_fixed_costs[thread_id] += cost;
       });
 
-  if (temp_abort) {
-    return false;
+  for (int i = 0; i < num_threads; ++i) {
+    if (error->empty()) {
+      *error = temp_errors[i];
+    }
+    if (temp_aborts[i] == 1) {
+      return false;
+    }
+    *fixed_cost += temp_fixed_costs[i];
   }
-
-  *fixed_cost = temp_fixed_cost;
   residual_blocks_.resize(num_active_residual_blocks);
 
   // Filter out unused or fixed parameter blocks.
