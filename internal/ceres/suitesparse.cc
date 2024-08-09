@@ -460,7 +460,7 @@ cholmod_factor* SuiteSparse::AnalyzeCholeskyWithGivenOrdering(
 
   if (cc_.status != CHOLMOD_OK) {
     *message =
-        StringPrintf("cholmod_analyze failed. error code: %d", cc_.status);
+        absl::StrFormat("cholmod_analyze failed. error code: %d", cc_.status);
     return nullptr;
   }
 
