@@ -141,6 +141,11 @@ if (EXISTS "${Ceres_SOURCE_DIR}/third_party/abseil-cpp/CMakeLists.txt")
   option(ABSL_ENABLE_INSTALL "Enable install rules" ON)
 
   add_subdirectory(third_party/abseil-cpp)
+  
+  # Read the abseil version from the source
+  include(ReadAbseilVersionFromSource)
+  read_abseil_version_from_source(${Ceres_SOURCE_DIR})
+  set(absl_DEPENDENCY "find_dependency(absl ${CERES_ABSEIL_VERSION})")
 
   unset(CMAKE_CXX_STANDARD)
   unset(CMAKE_CXX_VISIBILITY_PRESET)
@@ -157,9 +162,10 @@ else()
   # For some reason unknown to me having the version number in the
   # find_package call fails. So we check for he minimum version
   # manually.
-  if (absl_VERSION VERSION_LESS 20240116.2)
-    message(FATAL_ERROR "The version of abseil installed on the system is " ${absl_VERSION} " need at least 20240116.2")
+  if (absl_VERSION VERSION_LESS 20240116)
+    message(FATAL_ERROR "The version of abseil installed on the system is " ${absl_VERSION} " need at least 20240116")
   endif()
+  set(absl_DEPENDENCY "find_dependency(absl ${absl_VERSION})")
 endif()
 
 # Google Test
