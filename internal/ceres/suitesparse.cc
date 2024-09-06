@@ -84,93 +84,6 @@ void CopyArrayToInt32(size_t size, const void* src, void* dst) {
   }
 }
 
-class CholmodSparseView final {
- public:
-  CholmodSparseView(CompressedRowSparseMatrix* A, cholmod_common* cc);
-
-  ~CholmodSparseView();
-
-  cholmod_sparse& SparseRef();
-
-  cholmod_sparse* SparsePtr();
-
- private:
-  cholmod_common* cc_;
-
-  cholmod_sparse m_;
-};
-
-CholmodSparseView::CholmodSparseView(CompressedRowSparseMatrix* A,
-                                     cholmod_common* cc)
-    : cc_(cc) {
-  if (cc_->useGPU) {
-    m_.nrow = A->num_cols();
-    m_.ncol = A->num_rows();
-    m_.nzmax = A->num_nonzeros();
-    m_.nz = nullptr;
-
-    m_.p = cholmod_l_malloc(m_.ncol + 1, sizeof(int64_t), cc);
-    m_.i = cholmod_l_malloc(m_.nzmax, sizeof(int64_t), cc);
-    CopyArrayToInt64(m_.ncol + 1, A->rows(), m_.p);
-    CopyArrayToInt64(m_.nzmax, A->cols(), m_.i);
-
-    m_.x = reinterpret_cast<void*>(A->mutable_values());
-    m_.z = nullptr;
-
-    if (A->storage_type() ==
-        CompressedRowSparseMatrix::StorageType::LOWER_TRIANGULAR) {
-      m_.stype = 1;
-    } else if (A->storage_type() ==
-               CompressedRowSparseMatrix::StorageType::UPPER_TRIANGULAR) {
-      m_.stype = -1;
-    } else {
-      m_.stype = 0;
-    }
-
-    m_.itype = CHOLMOD_LONG;
-    m_.xtype = CHOLMOD_REAL;
-    m_.dtype = CHOLMOD_DOUBLE;
-    m_.sorted = 1;
-    m_.packed = 1;
-  } else {
-    m_.nrow = A->num_cols();
-    m_.ncol = A->num_rows();
-    m_.nzmax = A->num_nonzeros();
-    m_.nz = nullptr;
-    m_.p = reinterpret_cast<void*>(A->mutable_rows());
-    m_.i = reinterpret_cast<void*>(A->mutable_cols());
-    m_.x = reinterpret_cast<void*>(A->mutable_values());
-    m_.z = nullptr;
-
-    if (A->storage_type() ==
-        CompressedRowSparseMatrix::StorageType::LOWER_TRIANGULAR) {
-      m_.stype = 1;
-    } else if (A->storage_type() ==
-               CompressedRowSparseMatrix::StorageType::UPPER_TRIANGULAR) {
-      m_.stype = -1;
-    } else {
-      m_.stype = 0;
-    }
-
-    m_.itype = CHOLMOD_INT;
-    m_.xtype = CHOLMOD_REAL;
-    m_.dtype = CHOLMOD_DOUBLE;
-    m_.sorted = 1;
-    m_.packed = 1;
-  }
-}
-
-CholmodSparseView::~CholmodSparseView() {
-  if (cc_->useGPU) {
-    cholmod_l_free(m_.ncol + 1, sizeof(int64_t), m_.p, cc_);
-    cholmod_l_free(m_.nzmax, sizeof(int64_t), m_.i, cc_);
-  }
-}
-
-cholmod_sparse& CholmodSparseView::SparseRef() { return m_; }
-
-cholmod_sparse* CholmodSparseView::SparsePtr() { return &m_; }
-
 }  // namespace
 
 SuiteSparse::SuiteSparse(bool use_gpu) {
@@ -561,7 +474,7 @@ bool SuiteSparse::BlockOrdering(const cholmod_sparse* A,
   block_matrix.stype = A->stype;
   block_matrix.itype = CHOLMOD_LONG;
   block_matrix.xtype = CHOLMOD_PATTERN;
-  block_matrix.dtype = CHOLMOD_DOUBLE;
+  block_matrix.dtype = A->dtype;
   block_matrix.sorted = 1;
   block_matrix.packed = 1;
 
@@ -823,14 +736,14 @@ LinearSolverTerminationType SuiteSparseCholesky::Solve(const double* rhs,
 #ifndef CERES_NO_CHOLMOD_FLOAT
 
 std::unique_ptr<SparseCholesky> FloatSuiteSparseCholesky::Create(
-    const OrderingType ordering_type) {
+    const OrderingType ordering_type, const bool use_gpu) {
   return std::unique_ptr<SparseCholesky>(
-      new FloatSuiteSparseCholesky(ordering_type));
+      new FloatSuiteSparseCholesky(ordering_type, use_gpu));
 }
 
 FloatSuiteSparseCholesky::FloatSuiteSparseCholesky(
-    const OrderingType ordering_type)
-    : ordering_type_(ordering_type), factor_(nullptr) {}
+    const OrderingType ordering_type, const bool use_gpu)
+    : ordering_type_(ordering_type), ss_(use_gpu), factor_(nullptr) {}
 
 FloatSuiteSparseCholesky::~FloatSuiteSparseCholesky() {
   if (factor_ != nullptr) {
@@ -925,13 +838,13 @@ LinearSolverTerminationType FloatSuiteSparseCholesky::Solve(
 #else
 
 std::unique_ptr<SparseCholesky> FloatSuiteSparseCholesky::Create(
-    const OrderingType ordering_type) {
+    const OrderingType ordering_type, const bool use_gpu) {
   return nullptr;
 }
 
 FloatSuiteSparseCholesky::FloatSuiteSparseCholesky(
-    const OrderingType ordering_type)
-    : ordering_type_(ordering_type), factor_(nullptr) {}
+    const OrderingType ordering_type, const bool use_gpu)
+    : ordering_type_(ordering_type), ss_(use_gpu), factor_(nullptr) {}
 
 FloatSuiteSparseCholesky::~FloatSuiteSparseCholesky() {
   if (factor_ != nullptr) {
