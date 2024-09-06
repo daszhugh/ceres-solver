@@ -54,8 +54,8 @@ std::unique_ptr<SparseCholesky> SparseCholesky::Create(
         sparse_cholesky = FloatSuiteSparseCholesky::Create(
             options.ordering_type, options.use_suitesparse_gpu);
       } else {
-        sparse_cholesky = SuiteSparseCholesky::Create(options.ordering_type,
-                                                      options.use_suitesparse_gpu);
+        sparse_cholesky = SuiteSparseCholesky::Create(
+            options.ordering_type, options.use_suitesparse_gpu);
       }
       break;
 #else
