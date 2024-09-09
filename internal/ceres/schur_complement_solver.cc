@@ -46,7 +46,6 @@
 #include "ceres/block_sparse_matrix.h"
 #include "ceres/block_structure.h"
 #include "ceres/conjugate_gradients_solver.h"
-#include "ceres/detect_structure.h"
 #include "ceres/event_logger.h"
 #include "ceres/internal/eigen.h"
 #include "ceres/linear_solver.h"
@@ -111,11 +110,9 @@ LinearSolver::Summary SchurComplementSolver::SolveImpl(
     const int num_f_blocks = bs->cols.size() - num_eliminate_blocks;
 
     InitStorage(bs);
-    DetectStructure(*bs,
-                    num_eliminate_blocks,
-                    &options_.row_block_size,
-                    &options_.e_block_size,
-                    &options_.f_block_size);
+    options_.row_block_size = row_block_size_;
+    options_.e_block_size = e_block_size_;
+    options_.f_block_size = f_block_size_;
 
     // For the special case of the static structure <2,3,6> with
     // exactly one f block use the SchurEliminatorForOneFBlock.

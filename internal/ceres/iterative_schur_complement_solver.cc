@@ -74,11 +74,10 @@ LinearSolver::Summary IterativeSchurComplementSolver::SolveImpl(
   const int num_eliminate_blocks = options_.elimination_groups[0];
   // Initialize a ImplicitSchurComplement object.
   if (schur_complement_ == nullptr) {
-    DetectStructure(*(A->block_structure()),
-                    num_eliminate_blocks,
-                    &options_.row_block_size,
-                    &options_.e_block_size,
-                    &options_.f_block_size);
+    options_.row_block_size = row_block_size_;
+    options_.e_block_size = e_block_size_;
+    options_.f_block_size = f_block_size_;
+
     schur_complement_ = std::make_unique<ImplicitSchurComplement>(options_);
   }
   schur_complement_->Init(*A, per_solve_options.D, b);

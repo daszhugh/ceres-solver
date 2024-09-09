@@ -39,6 +39,7 @@
 #include "absl/strings/str_format.h"
 #include "ceres/callbacks.h"
 #include "ceres/context_impl.h"
+#include "ceres/detect_structure.h"
 #include "ceres/evaluator.h"
 #include "ceres/linear_solver.h"
 #include "ceres/minimizer.h"
@@ -406,11 +407,24 @@ bool TrustRegionPreprocessor::Preprocess(const Solver::Options& options,
   }
 
   if (!SetupLinearSolver(pp) || !SetupEvaluator(pp) ||
-      !SetupInnerIterationMinimizer(pp)) {
+      !SetupInnerIterationMinimizer(pp) || !SetupMinimizerOptions(pp)) {
     return false;
   }
 
-  return SetupMinimizerOptions(pp);
+  if (IsSchurType(pp->linear_solver_options.type)) {
+    DetectStructure(*static_cast<internal::BlockSparseMatrix*>(
+                         pp->minimizer_options.jacobian.get())
+                         ->block_structure(),
+                    pp->linear_solver_options.elimination_groups[0],
+                    &pp->linear_solver_options.row_block_size,
+                    &pp->linear_solver_options.e_block_size,
+                    &pp->linear_solver_options.f_block_size);
+    pp->linear_solver->UpdateStructure(pp->linear_solver_options.row_block_size,
+                                       pp->linear_solver_options.e_block_size,
+                                       pp->linear_solver_options.f_block_size);
+  }
+
+  return true;
 }
 
 }  // namespace ceres::internal

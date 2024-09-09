@@ -48,7 +48,6 @@
 #include "ceres/context.h"
 #include "ceres/context_impl.h"
 #include "ceres/cuda_sparse_cholesky.h"
-#include "ceres/detect_structure.h"
 #include "ceres/eigensparse.h"
 #include "ceres/gradient_checking_cost_function.h"
 #include "ceres/internal/export.h"
@@ -797,19 +796,9 @@ void Solver::Solve(const Solver::Options& options,
   // lack of a Schur structure, the preprocessor may change the linear
   // solver type.
   if (status && IsSchurType(pp.linear_solver_options.type)) {
-    // TODO(sameeragarwal): We can likely eliminate the duplicate call
-    // to DetectStructure here and inside the linear solver, by
-    // calling this in the preprocessor.
-    int row_block_size;
-    int e_block_size;
-    int f_block_size;
-    DetectStructure(*static_cast<internal::BlockSparseMatrix*>(
-                         pp.minimizer_options.jacobian.get())
-                         ->block_structure(),
-                    pp.linear_solver_options.elimination_groups[0],
-                    &row_block_size,
-                    &e_block_size,
-                    &f_block_size);
+    int row_block_size = pp.linear_solver_options.row_block_size;
+    int e_block_size = pp.linear_solver_options.e_block_size;
+    int f_block_size = pp.linear_solver_options.f_block_size;
     summary->schur_structure_given =
         SchurStructureToString(row_block_size, e_block_size, f_block_size);
     internal::GetBestSchurTemplateSpecialization(

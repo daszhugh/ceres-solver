@@ -352,8 +352,19 @@ class CERES_NO_EXPORT LinearSolver {
     return {};
   }
 
+  void UpdateStructure(int row_block_size, int e_block_size, int f_block_size) {
+    row_block_size_ = row_block_size;
+    e_block_size_ = e_block_size;
+    f_block_size_ = f_block_size;
+  }
+
   // Factory
   static std::unique_ptr<LinearSolver> Create(const Options& options);
+
+ protected:
+  int row_block_size_ = Eigen::Dynamic;
+  int e_block_size_ = Eigen::Dynamic;
+  int f_block_size_ = Eigen::Dynamic;
 };
 
 // This templated subclass of LinearSolver serves as a base class for
