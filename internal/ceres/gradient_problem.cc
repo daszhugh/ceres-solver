@@ -31,29 +31,28 @@
 #include "ceres/gradient_problem.h"
 
 #include <memory>
+#include <utility>
 
 #include "absl/log/check.h"
+#include "ceres/manifold.h"
 
 namespace ceres {
 
-GradientProblem::GradientProblem(FirstOrderFunction* function)
-    : function_(function),
+GradientProblem::GradientProblem(std::unique_ptr<FirstOrderFunction> function)
+    : function_(std::move(function)),
       manifold_(std::make_unique<EuclideanManifold<DYNAMIC>>(
           function_->NumParameters())),
       scratch_(new double[function_->NumParameters()]) {
-  CHECK(function != nullptr);
+  CHECK(function_ != nullptr);
 }
 
-GradientProblem::GradientProblem(FirstOrderFunction* function,
-                                 Manifold* manifold)
-    : function_(function), scratch_(new double[function_->NumParameters()]) {
-  CHECK(function != nullptr);
-  if (manifold != nullptr) {
-    manifold_.reset(manifold);
-  } else {
-    manifold_ = std::make_unique<EuclideanManifold<DYNAMIC>>(
-        function_->NumParameters());
-  }
+GradientProblem::GradientProblem(std::unique_ptr<FirstOrderFunction> function,
+                                 std::unique_ptr<Manifold> manifold)
+    : function_(std::move(function)),
+      manifold_(std::move(manifold)),
+      scratch_(new double[function_->NumParameters()]) {
+  CHECK(function_ != nullptr);
+  CHECK(manifold_ != nullptr);
   CHECK_EQ(function_->NumParameters(), manifold_->AmbientSize());
 }
 

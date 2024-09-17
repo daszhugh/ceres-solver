@@ -33,6 +33,7 @@
 // GradientProblemSolver using analytic derivatives.
 
 #include <iostream>
+#include <memory>
 
 #include "absl/log/initialize.h"
 #include "ceres/ceres.h"
@@ -68,7 +69,7 @@ int main(int argc, char** argv) {
   options.minimizer_progress_to_stdout = true;
 
   ceres::GradientProblemSolver::Summary summary;
-  ceres::GradientProblem problem(new Rosenbrock());
+  ceres::GradientProblem problem(std::make_unique<Rosenbrock>());
   ceres::Solve(options, problem, parameters, &summary);
 
   std::cout << summary.FullReport() << "\n";

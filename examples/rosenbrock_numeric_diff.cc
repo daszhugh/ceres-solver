@@ -34,6 +34,7 @@
 // differentiation.
 
 #include <iostream>
+#include <memory>
 
 #include "absl/log/initialize.h"
 #include "ceres/ceres.h"
@@ -47,12 +48,12 @@ struct Rosenbrock {
     return true;
   }
 
-  static ceres::FirstOrderFunction* Create() {
+  static std::unique_ptr<ceres::FirstOrderFunction> Create() {
     constexpr int kNumParameters = 2;
-    return new ceres::NumericDiffFirstOrderFunction<Rosenbrock,
-                                                    ceres::CENTRAL,
-                                                    kNumParameters>(
-        new Rosenbrock);
+    return std::make_unique<
+        ceres::NumericDiffFirstOrderFunction<Rosenbrock,
+                                             ceres::CENTRAL,
+                                             kNumParameters>>();
   }
 };
 
