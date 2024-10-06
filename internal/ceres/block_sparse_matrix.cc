@@ -39,6 +39,7 @@
 
 #include "absl/log/check.h"
 #include "absl/log/log.h"
+#include "absl/strings/str_format.h"
 #include "ceres/block_structure.h"
 #include "ceres/crs_matrix.h"
 #include "ceres/internal/eigen.h"
@@ -328,7 +329,7 @@ void BlockSparseMatrix::LeftMultiplyAndAccumulate(const double* x,
   CHECK(x != nullptr);
   CHECK(y != nullptr);
   // Single-threaded left products are always computed using a non-transpose
-  // block structure, because it has linear acess pattern to matrix elements
+  // block structure, because it has linear access pattern to matrix elements
   for (int i = 0; i < block_structure_->rows.size(); ++i) {
     int row_block_pos = block_structure_->rows[i].block.position;
     int row_block_size = block_structure_->rows[i].block.size;
@@ -567,11 +568,11 @@ void BlockSparseMatrix::ToTextFile(FILE* file) const {
       int jac_pos = cell.position;
       for (int r = 0; r < row_block_size; ++r) {
         for (int c = 0; c < col_block_size; ++c) {
-          fprintf(file,
-                  "% 10d % 10d %17f\n",
-                  row_block_pos + r,
-                  col_block_pos + c,
-                  values_[jac_pos++]);
+          absl::FPrintF(file,
+                        "% 10d % 10d %17f\n",
+                        row_block_pos + r,
+                        col_block_pos + c,
+                        values_[jac_pos++]);
         }
       }
     }

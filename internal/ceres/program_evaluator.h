@@ -94,6 +94,7 @@
 
 #include "absl/log/log.h"
 #include "ceres/evaluation_callback.h"
+#include "ceres/evaluator.h"
 #include "ceres/execution_summary.h"
 #include "ceres/internal/eigen.h"
 #include "ceres/parallel_for.h"
@@ -102,6 +103,7 @@
 #include "ceres/program.h"
 #include "ceres/residual_block.h"
 #include "ceres/small_blas.h"
+#include "ceres/sparse_matrix.h"
 
 namespace ceres {
 namespace internal {
@@ -168,7 +170,7 @@ class ProgramEvaluator final : public Evaluator {
       jacobian->SetZero(options_.context, options_.num_threads);
     }
 
-    // Each thread gets it's own cost and evaluate scratch space.
+    // Each thread gets its own cost and evaluate scratch space.
     for (int i = 0; i < options_.num_threads; ++i) {
       evaluate_scratch_[i].cost = 0.0;
       if (gradient != nullptr) {

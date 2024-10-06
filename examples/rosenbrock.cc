@@ -32,6 +32,8 @@
 // (https://en.wikipedia.org/wiki/Rosenbrock_function) using
 // GradientProblemSolver using automatically computed derivatives.
 
+#include <memory>
+
 #include "absl/log/initialize.h"
 #include "ceres/ceres.h"
 
@@ -45,10 +47,10 @@ struct Rosenbrock {
     return true;
   }
 
-  static ceres::FirstOrderFunction* Create() {
+  static std::unique_ptr<ceres::FirstOrderFunction> Create() {
     constexpr int kNumParameters = 2;
-    return new ceres::AutoDiffFirstOrderFunction<Rosenbrock, kNumParameters>(
-        new Rosenbrock);
+    return std::make_unique<
+        ceres::AutoDiffFirstOrderFunction<Rosenbrock, kNumParameters>>();
   }
 };
 

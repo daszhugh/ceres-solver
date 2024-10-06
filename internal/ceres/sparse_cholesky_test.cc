@@ -1,5 +1,5 @@
 // Ceres Solver - A fast non-linear least squares minimizer
-// Copyright 2023 Google Inc. All rights reserved.
+// Copyright 2024 Google Inc. All rights reserved.
 // http://ceres-solver.org/
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,13 +30,17 @@
 
 #include "ceres/sparse_cholesky.h"
 
+#include <limits>
 #include <memory>
-#include <numeric>
 #include <random>
+#include <sstream>
+#include <string>
+#include <utility>
 #include <vector>
 
+#include "Eigen/Cholesky"
+#include "Eigen/Core"
 #include "Eigen/Dense"
-#include "Eigen/SparseCore"
 #include "absl/log/check.h"
 #include "ceres/block_sparse_matrix.h"
 #include "ceres/compressed_row_sparse_matrix.h"
@@ -45,6 +49,8 @@
 #include "ceres/internal/config.h"
 #include "ceres/internal/eigen.h"
 #include "ceres/iterative_refiner.h"
+#include "ceres/linear_solver.h"
+#include "ceres/types.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -107,6 +113,7 @@ bool ComputeExpectedSolution(const CompressedRowSparseMatrix& lhs,
 
 void SparseCholeskySolverUnitTest(
     const SparseLinearAlgebraLibraryType sparse_linear_algebra_library_type,
+    const bool use_single_precision,
     const OrderingType ordering_type,
     const bool use_block_structure,
     const int num_blocks,
@@ -115,15 +122,19 @@ void SparseCholeskySolverUnitTest(
     const double block_density,
     std::mt19937& prng) {
   LinearSolver::Options sparse_cholesky_options;
-  sparse_cholesky_options.sparse_linear_algebra_library_type =
-      sparse_linear_algebra_library_type;
-  sparse_cholesky_options.ordering_type = ordering_type;
 #ifndef CERES_NO_CUDSS
   ContextImpl context;
   sparse_cholesky_options.context = &context;
   std::string error;
   CHECK(context.InitCuda(&error)) << error;
 #endif  // CERES_NO_CUDSS
+
+  sparse_cholesky_options.sparse_linear_algebra_library_type =
+      sparse_linear_algebra_library_type;
+  sparse_cholesky_options.ordering_type = ordering_type;
+  sparse_cholesky_options.max_num_refinement_iterations = 0;
+  sparse_cholesky_options.use_mixed_precision_solves = use_single_precision;
+
   auto sparse_cholesky = SparseCholesky::Create(sparse_cholesky_options);
   const CompressedRowSparseMatrix::StorageType storage_type =
       sparse_cholesky->StorageType();
@@ -150,22 +161,30 @@ void SparseCholeskySolverUnitTest(
       LinearSolverTerminationType::SUCCESS);
   Matrix eigen_lhs;
   lhs->ToDenseMatrix(&eigen_lhs);
-  EXPECT_NEAR((actual - expected).norm() / actual.norm(),
-              0.0,
-              std::numeric_limits<double>::epsilon() * 20)
+  const double kTolerance =
+      (use_single_precision ? std::numeric_limits<float>::epsilon()
+                            : std::numeric_limits<double>::epsilon()) *
+      20;
+
+  EXPECT_NEAR((actual - expected).norm() / actual.norm(), 0.0, kTolerance)
       << "\n"
       << eigen_lhs;
 }
 
+// SparseLinearAlgebraLibraryType
+// FLOAT/DOUBLE
+// OrderingType
+// BlockStructure
 using Param =
-    ::testing::tuple<SparseLinearAlgebraLibraryType, OrderingType, bool>;
+    ::testing::tuple<SparseLinearAlgebraLibraryType, bool, OrderingType, bool>;
 
 std::string ParamInfoToString(testing::TestParamInfo<Param> info) {
   Param param = info.param;
   std::stringstream ss;
   ss << SparseLinearAlgebraLibraryTypeToString(::testing::get<0>(param)) << "_"
-     << ::testing::get<1>(param) << "_"
-     << (::testing::get<2>(param) ? "UseBlockStructure" : "NoBlockStructure");
+     << (::testing::get<1>(param) ? "FLOAT" : "DOUBLE") << "_"
+     << ::testing::get<2>(param) << "_"
+     << (::testing::get<3>(param) ? "UseBlockStructure" : "NoBlockStructure");
   return ss.str();
 }
 
@@ -192,6 +211,7 @@ TEST_P(SparseCholeskyTest, FactorAndSolve) {
       SparseCholeskySolverUnitTest(::testing::get<0>(param),
                                    ::testing::get<1>(param),
                                    ::testing::get<2>(param),
+                                   ::testing::get<3>(param),
                                    num_blocks,
                                    kMinBlockSize,
                                    kMaxBlockSize,
@@ -204,42 +224,33 @@ TEST_P(SparseCholeskyTest, FactorAndSolve) {
 namespace {
 
 #ifndef CERES_NO_SUITESPARSE
-INSTANTIATE_TEST_SUITE_P(
-    SuiteSparseCholesky,
-    SparseCholeskyTest,
-    ::testing::Combine(::testing::Values(SUITE_SPARSE),
-                       ::testing::Values(OrderingType::AMD,
-                                         OrderingType::NATURAL),
-                       ::testing::Values(true, false)),
-    ParamInfoToString);
-#endif
+const auto SuiteSparseCholeskyParameters = ::testing::Combine(
+    ::testing::Values(SUITE_SPARSE),
+#if defined(CERES_NO_CHOLMOD_FLOAT)
+    ::testing::Values(false),
+#else
+    ::testing::Values(false, true),
+#endif  // defined(CERES_NO_CHOLMOD_FLOAT)
+#if defined(CERES_NO_CHOLMOD_PARTITION)
+    ::testing::Values(OrderingType::AMD, OrderingType::NATURAL),
+#else
+    ::testing::Values(
+        OrderingType::AMD, OrderingType::NESDIS, OrderingType::NATURAL),
+#endif  // defined(CERES_NO_CHOLMOD_PARTITION)
+    ::testing::Values(true, false));
 
-#if !defined(CERES_NO_SUITESPARSE) && !defined(CERES_NO_CHOLMOD_PARTITION)
-INSTANTIATE_TEST_SUITE_P(
-    SuiteSparseCholeskyMETIS,
-    SparseCholeskyTest,
-    ::testing::Combine(::testing::Values(SUITE_SPARSE),
-                       ::testing::Values(OrderingType::NESDIS),
-                       ::testing::Values(true, false)),
-    ParamInfoToString);
-#endif  // !defined(CERES_NO_SUITESPARSE) &&
-        // !defined(CERES_NO_CHOLMOD_PARTITION)
+INSTANTIATE_TEST_SUITE_P(SuiteSparseCholesky,
+                         SparseCholeskyTest,
+                         SuiteSparseCholeskyParameters,
+                         ParamInfoToString);
+#endif  // !defined(CERES_NO_SUITESPARSE)
 
 #ifndef CERES_NO_ACCELERATE_SPARSE
 INSTANTIATE_TEST_SUITE_P(
     AccelerateSparseCholesky,
     SparseCholeskyTest,
     ::testing::Combine(::testing::Values(ACCELERATE_SPARSE),
-                       ::testing::Values(OrderingType::AMD,
-                                         OrderingType::NESDIS,
-                                         OrderingType::NATURAL),
-                       ::testing::Values(true, false)),
-    ParamInfoToString);
-
-INSTANTIATE_TEST_SUITE_P(
-    AccelerateSparseCholeskySingle,
-    SparseCholeskyTest,
-    ::testing::Combine(::testing::Values(ACCELERATE_SPARSE),
+                       ::testing::Values(false, true),
                        ::testing::Values(OrderingType::AMD,
                                          OrderingType::NESDIS,
                                          OrderingType::NATURAL),
@@ -248,62 +259,33 @@ INSTANTIATE_TEST_SUITE_P(
 #endif
 
 #ifdef CERES_USE_EIGEN_SPARSE
-INSTANTIATE_TEST_SUITE_P(
-    EigenSparseCholesky,
-    SparseCholeskyTest,
-    ::testing::Combine(::testing::Values(EIGEN_SPARSE),
-                       ::testing::Values(OrderingType::AMD,
-                                         OrderingType::NATURAL),
-                       ::testing::Values(true, false)),
-    ParamInfoToString);
+const auto EigenSparseCholeskyParameters = ::testing::Combine(
+    ::testing::Values(EIGEN_SPARSE),
+    ::testing::Values(false, true),
+#if defined(CERES_NO_EIGEN_METIS)
+    ::testing::Values(OrderingType::AMD, OrderingType::NATURAL),
+#else
+    ::testing::Values(
+        OrderingType::AMD, OrderingType::NATURAL, OrderingType::NESDIS),
+#endif  // defined(CERES_NO_EIGEN_METIS)
+    ::testing::Values(true, false));
 
-INSTANTIATE_TEST_SUITE_P(
-    FloatEigenSparseCholesky,
-    SparseCholeskyTest,
-    ::testing::Combine(::testing::Values(EIGEN_SPARSE),
-                       ::testing::Values(OrderingType::AMD,
-                                         OrderingType::NATURAL),
-                       ::testing::Values(true, false)),
-    ParamInfoToString);
+INSTANTIATE_TEST_SUITE_P(EigenSparseCholesky,
+                         SparseCholeskyTest,
+                         EigenSparseCholeskyParameters,
+                         ParamInfoToString);
 #endif  // CERES_USE_EIGEN_SPARSE
 
 #ifndef CERES_NO_CUDSS
-using CuDSSCholeskyDouble = CudaSparseCholesky<double>;
 INSTANTIATE_TEST_SUITE_P(
-    CuDSSCholeskyDouble,
+    CudaCholesky,
     SparseCholeskyTest,
     ::testing::Combine(::testing::Values(CUDA_SPARSE),
-                       ::testing::Values(OrderingType::AMD),
-                       ::testing::Values(true, false)),
-    ParamInfoToString);
-
-using CuDSSCholeskySingle = CudaSparseCholesky<float>;
-INSTANTIATE_TEST_SUITE_P(
-    CuDSSCholeskySingle,
-    SparseCholeskyTest,
-    ::testing::Combine(::testing::Values(CUDA_SPARSE),
+                       ::testing::Values(false, true),
                        ::testing::Values(OrderingType::AMD),
                        ::testing::Values(true, false)),
     ParamInfoToString);
 #endif  // CERES_NO_CUDSS
-
-#if defined(CERES_USE_EIGEN_SPARSE) && !defined(CERES_NO_EIGEN_METIS)
-INSTANTIATE_TEST_SUITE_P(
-    EigenSparseCholeskyMETIS,
-    SparseCholeskyTest,
-    ::testing::Combine(::testing::Values(EIGEN_SPARSE),
-                       ::testing::Values(OrderingType::NESDIS),
-                       ::testing::Values(true, false)),
-    ParamInfoToString);
-
-INSTANTIATE_TEST_SUITE_P(
-    EigenSparseCholeskySingleMETIS,
-    SparseCholeskyTest,
-    ::testing::Combine(::testing::Values(EIGEN_SPARSE),
-                       ::testing::Values(OrderingType::NESDIS),
-                       ::testing::Values(true, false)),
-    ParamInfoToString);
-#endif  // defined(CERES_USE_EIGEN_SPARSE) && !defined(CERES_NO_EIGEN_METIS)
 
 class MockSparseCholesky : public SparseCholesky {
  public:

@@ -30,6 +30,9 @@
 
 #include "ceres/gradient_problem.h"
 
+#include <memory>
+
+#include "ceres/manifold.h"
 #include "gtest/gtest.h"
 
 namespace ceres::internal {
@@ -64,13 +67,16 @@ class QuadraticTestFunction : public ceres::FirstOrderFunction {
 
 TEST(GradientProblem, TakesOwnershipOfFirstOrderFunction) {
   bool is_destructed = false;
-  { ceres::GradientProblem problem(new QuadraticTestFunction(&is_destructed)); }
+  {
+    ceres::GradientProblem problem(
+        std::make_unique<QuadraticTestFunction>(&is_destructed));
+  }
   EXPECT_TRUE(is_destructed);
 }
 
 TEST(GradientProblem, EvaluationWithManifoldAndNoGradient) {
-  ceres::GradientProblem problem(new QuadraticTestFunction(),
-                                 new EuclideanManifold<1>);
+  ceres::GradientProblem problem(std::make_unique<QuadraticTestFunction>(),
+                                 std::make_unique<EuclideanManifold<1>>());
   double x = 7.0;
   double cost = 0;
   problem.Evaluate(&x, &cost, nullptr);
@@ -78,7 +84,7 @@ TEST(GradientProblem, EvaluationWithManifoldAndNoGradient) {
 }
 
 TEST(GradientProblem, EvaluationWithoutManifoldAndWithGradient) {
-  ceres::GradientProblem problem(new QuadraticTestFunction());
+  ceres::GradientProblem problem(std::make_unique<QuadraticTestFunction>());
   double x = 7.0;
   double cost = 0;
   double gradient = 0;
@@ -87,8 +93,8 @@ TEST(GradientProblem, EvaluationWithoutManifoldAndWithGradient) {
 }
 
 TEST(GradientProblem, EvaluationWithManifoldAndWithGradient) {
-  ceres::GradientProblem problem(new QuadraticTestFunction(),
-                                 new EuclideanManifold<1>);
+  ceres::GradientProblem problem(std::make_unique<QuadraticTestFunction>(),
+                                 std::make_unique<EuclideanManifold<1>>());
   double x = 7.0;
   double cost = 0;
   double gradient = 0;

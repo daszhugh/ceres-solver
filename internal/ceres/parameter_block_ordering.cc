@@ -33,17 +33,16 @@
 #include <map>
 #include <memory>
 #include <set>
-#include <unordered_set>
 #include <vector>
 
 #include "absl/log/check.h"
+#include "ceres/event_logger.h"
 #include "ceres/graph.h"
 #include "ceres/graph_algorithms.h"
 #include "ceres/map_util.h"
 #include "ceres/parameter_block.h"
 #include "ceres/program.h"
 #include "ceres/residual_block.h"
-#include "ceres/wall_time.h"
 
 namespace ceres::internal {
 
@@ -57,7 +56,7 @@ int ComputeStableSchurOrdering(const Program& program,
 
   const std::vector<ParameterBlock*>& parameter_blocks =
       program.parameter_blocks();
-  const std::unordered_set<ParameterBlock*>& vertices = graph->vertices();
+  const auto& vertices = graph->vertices();
   for (auto* parameter_block : parameter_blocks) {
     if (vertices.count(parameter_block) > 0) {
       ordering->push_back(parameter_block);

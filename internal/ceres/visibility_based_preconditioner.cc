@@ -34,13 +34,14 @@
 #include <functional>
 #include <iterator>
 #include <memory>
-#include <set>
 #include <string>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "Eigen/Dense"
+#include "absl/container/btree_set.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "ceres/block_random_access_sparse_matrix.h"
@@ -120,7 +121,7 @@ VisibilityBasedPreconditioner::~VisibilityBasedPreconditioner() = default;
 // preconditioner matrix.
 void VisibilityBasedPreconditioner::ComputeClusterJacobiSparsity(
     const CompressedRowBlockStructure& bs) {
-  std::vector<std::set<int>> visibility;
+  std::vector<absl::btree_set<int>> visibility;
   ComputeVisibility(bs, options_.elimination_groups[0], &visibility);
   CHECK_EQ(num_blocks_, visibility.size());
   ClusterCameras(visibility);
@@ -138,7 +139,7 @@ void VisibilityBasedPreconditioner::ComputeClusterJacobiSparsity(
 // of edges in this forest are the cluster pairs.
 void VisibilityBasedPreconditioner::ComputeClusterTridiagonalSparsity(
     const CompressedRowBlockStructure& bs) {
-  std::vector<std::set<int>> visibility;
+  std::vector<absl::btree_set<int>> visibility;
   ComputeVisibility(bs, options_.elimination_groups[0], &visibility);
   CHECK_EQ(num_blocks_, visibility.size());
   ClusterCameras(visibility);
@@ -147,7 +148,7 @@ void VisibilityBasedPreconditioner::ComputeClusterTridiagonalSparsity(
   // edges are the number of 3D points/e_blocks visible in both the
   // clusters at the ends of the edge. Return an approximate degree-2
   // maximum spanning forest of this graph.
-  std::vector<std::set<int>> cluster_visibility;
+  std::vector<absl::btree_set<int>> cluster_visibility;
   ComputeClusterVisibility(visibility, &cluster_visibility);
   auto cluster_graph = CreateClusterGraph(cluster_visibility);
   CHECK(cluster_graph != nullptr);
@@ -171,11 +172,11 @@ void VisibilityBasedPreconditioner::InitStorage(
 // The cluster_membership_ vector is updated to indicate cluster
 // memberships for each camera block.
 void VisibilityBasedPreconditioner::ClusterCameras(
-    const std::vector<std::set<int>>& visibility) {
+    const std::vector<absl::btree_set<int>>& visibility) {
   auto schur_complement_graph = CreateSchurComplementGraph(visibility);
   CHECK(schur_complement_graph != nullptr);
 
-  std::unordered_map<int, int> membership;
+  absl::flat_hash_map<int, int> membership;
 
   if (options_.visibility_clustering_type == CANONICAL_VIEWS) {
     std::vector<int> centers;
@@ -252,7 +253,7 @@ void VisibilityBasedPreconditioner::ComputeBlockPairsInPreconditioner(
       break;
     }
 
-    std::set<int> f_blocks;
+    absl::btree_set<int> f_blocks;
     for (; r < num_row_blocks; ++r) {
       const CompressedRow& row = bs.rows[r];
       if (row.cells.front().block_id != e_block_id) {
@@ -457,17 +458,17 @@ bool VisibilityBasedPreconditioner::IsBlockPairOffDiagonal(
 // each vertex.
 void VisibilityBasedPreconditioner::ForestToClusterPairs(
     const WeightedGraph<int>& forest,
-    std::unordered_set<std::pair<int, int>, pair_hash>* cluster_pairs) const {
+    absl::flat_hash_set<std::pair<int, int>>* cluster_pairs) const {
   CHECK(cluster_pairs != nullptr);
   cluster_pairs->clear();
-  const std::unordered_set<int>& vertices = forest.vertices();
+  const absl::flat_hash_set<int>& vertices = forest.vertices();
   CHECK_EQ(vertices.size(), num_clusters_);
 
   // Add all the cluster pairs corresponding to the edges in the
   // forest.
   for (const int cluster1 : vertices) {
     cluster_pairs->insert(std::make_pair(cluster1, cluster1));
-    const std::unordered_set<int>& neighbors = forest.Neighbors(cluster1);
+    const absl::flat_hash_set<int>& neighbors = forest.Neighbors(cluster1);
     for (const int cluster2 : neighbors) {
       if (cluster1 < cluster2) {
         cluster_pairs->insert(std::make_pair(cluster1, cluster2));
@@ -480,8 +481,8 @@ void VisibilityBasedPreconditioner::ForestToClusterPairs(
 // of all its cameras. In other words, the set of points visible to
 // any camera in the cluster.
 void VisibilityBasedPreconditioner::ComputeClusterVisibility(
-    const std::vector<std::set<int>>& visibility,
-    std::vector<std::set<int>>* cluster_visibility) const {
+    const std::vector<absl::btree_set<int>>& visibility,
+    std::vector<absl::btree_set<int>>* cluster_visibility) const {
   CHECK(cluster_visibility != nullptr);
   cluster_visibility->resize(0);
   cluster_visibility->resize(num_clusters_);
@@ -497,7 +498,7 @@ void VisibilityBasedPreconditioner::ComputeClusterVisibility(
 // vertices.
 std::unique_ptr<WeightedGraph<int>>
 VisibilityBasedPreconditioner::CreateClusterGraph(
-    const std::vector<std::set<int>>& cluster_visibility) const {
+    const std::vector<absl::btree_set<int>>& cluster_visibility) const {
   auto cluster_graph = std::make_unique<WeightedGraph<int>>();
 
   for (int i = 0; i < num_clusters_; ++i) {
@@ -505,10 +506,10 @@ VisibilityBasedPreconditioner::CreateClusterGraph(
   }
 
   for (int i = 0; i < num_clusters_; ++i) {
-    const std::set<int>& cluster_i = cluster_visibility[i];
+    const absl::btree_set<int>& cluster_i = cluster_visibility[i];
     for (int j = i + 1; j < num_clusters_; ++j) {
       std::vector<int> intersection;
-      const std::set<int>& cluster_j = cluster_visibility[j];
+      const absl::btree_set<int>& cluster_j = cluster_visibility[j];
       std::set_intersection(cluster_i.begin(),
                             cluster_i.end(),
                             cluster_j.begin(),
@@ -528,7 +529,7 @@ VisibilityBasedPreconditioner::CreateClusterGraph(
   return cluster_graph;
 }
 
-// Canonical views clustering returns a std::unordered_map from vertices to
+// Canonical views clustering returns a absl::flat_hash_set from vertices to
 // cluster ids. Convert this into a flat array for quick lookup. It is
 // possible that some of the vertices may not be associated with any
 // cluster. In that case, randomly assign them to one of the clusters.
@@ -537,13 +538,13 @@ VisibilityBasedPreconditioner::CreateClusterGraph(
 // the membership_map, we also map the cluster ids to a contiguous set
 // of integers so that the cluster ids are in [0, num_clusters_).
 void VisibilityBasedPreconditioner::FlattenMembershipMap(
-    const std::unordered_map<int, int>& membership_map,
+    const absl::flat_hash_map<int, int>& membership_map,
     std::vector<int>* membership_vector) const {
   CHECK(membership_vector != nullptr);
   membership_vector->resize(0);
   membership_vector->resize(num_blocks_, -1);
 
-  std::unordered_map<int, int> cluster_id_to_index;
+  absl::flat_hash_map<int, int> cluster_id_to_index;
   // Iterate over the cluster membership map and update the
   // cluster_membership_ vector assigning arbitrary cluster ids to
   // the few cameras that have not been clustered.

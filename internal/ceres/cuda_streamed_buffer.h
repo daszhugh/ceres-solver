@@ -165,7 +165,7 @@ class CERES_NO_EXPORT CudaStreamedBuffer {
   //
   // b. Copying from regular memory
   // In this case a copy from regular memory to page-locked memory is required
-  // in order to get asynchrnonous operation. Because pinned memory on host-side
+  // in order to get asynchronous operation. Because pinned memory on host-side
   // is reused, additional synchronization is required. On each iteration method
   // the following actions are performed:
   //  - Wait till previous copy operation in stream is completed
@@ -319,10 +319,10 @@ class CERES_NO_EXPORT CudaStreamedBuffer {
     // This class only supports cpu memory as a source
     CHECK_NE(attributes.type, cudaMemoryTypeDevice);
     // If host memory was allocated (or registered) with CUDA API, or is a
-    // managed memory, then call to cudaMemcpyAsync will be asynchrnous. In case
-    // of managed memory it might be slightly better to perform a single call of
-    // user-provided call-back (and hope that page migration will provide a
-    // similar throughput with zero efforts from our side).
+    // managed memory, then call to cudaMemcpyAsync will be asynchronous. In
+    // case of managed memory it might be slightly better to perform a single
+    // call of user-provided call-back (and hope that page migration will
+    // provide a similar throughput with zero efforts from our side).
     return attributes.type == cudaMemoryTypeUnregistered;
   }
 

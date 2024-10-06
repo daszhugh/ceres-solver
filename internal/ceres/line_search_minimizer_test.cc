@@ -28,8 +28,8 @@
 //
 // Author: sameeragarwal@google.com (Sameer Agarwal)
 
-#include <cmath>
-#include <cstdlib>
+#include <limits>
+#include <memory>
 
 #include "ceres/ceres.h"
 #include "gtest/gtest.h"
@@ -53,7 +53,8 @@ class QuadraticFirstOrderFunction : public ceres::FirstOrderFunction {
 
 TEST(LineSearchMinimizerTest, FinalCostIsZero) {
   double parameters[1] = {2.0};
-  ceres::GradientProblem problem(new QuadraticFirstOrderFunction);
+  ceres::GradientProblem problem(
+      std::make_unique<QuadraticFirstOrderFunction>());
   ceres::GradientProblemSolver::Options options;
   ceres::GradientProblemSolver::Summary summary;
   ceres::Solve(options, problem, parameters, &summary);

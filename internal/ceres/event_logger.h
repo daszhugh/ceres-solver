@@ -1,5 +1,5 @@
 // Ceres Solver - A fast non-linear least squares minimizer
-// Copyright 2023 Google Inc. All rights reserved.
+// Copyright 2024 Google Inc. All rights reserved.
 // http://ceres-solver.org/
 //
 // Redistribution and use in source and binary forms, with or without
@@ -28,20 +28,17 @@
 //
 // Author: strandmark@google.com (Petter Strandmark)
 
-#ifndef CERES_INTERNAL_WALL_TIME_H_
-#define CERES_INTERNAL_WALL_TIME_H_
+#ifndef CERES_INTERNAL_EVENT_LOGGER_H_
+#define CERES_INTERNAL_EVENT_LOGGER_H_
 
-#include <map>
 #include <string>
+#include <string_view>
 
+#include "absl/time/time.h"
 #include "ceres/internal/disable_warnings.h"
 #include "ceres/internal/export.h"
 
 namespace ceres::internal {
-
-// Returns time, in seconds, from some arbitrary starting point. On unixes,
-// gettimeofday is used. The granularity is microseconds.
-CERES_NO_EXPORT double WallTimeInSeconds();
 
 // Log a series of events, recording for each event the time elapsed
 // since the last event and since the creation of the object.
@@ -69,13 +66,13 @@ CERES_NO_EXPORT double WallTimeInSeconds();
 //     Total:  time3  time1 + time2 + time3;
 class CERES_NO_EXPORT EventLogger {
  public:
-  explicit EventLogger(const std::string& logger_name);
+  explicit EventLogger(std::string_view logger_name);
   ~EventLogger();
-  void AddEvent(const std::string& event_name);
+  void AddEvent(std::string_view event_name);
 
  private:
-  double start_time_;
-  double last_event_time_;
+  const absl::Time start_time_;
+  absl::Time last_event_time_;
   std::string events_;
 };
 
@@ -83,4 +80,4 @@ class CERES_NO_EXPORT EventLogger {
 
 #include "ceres/internal/reenable_warnings.h"
 
-#endif  // CERES_INTERNAL_WALL_TIME_H_
+#endif  // CERES_INTERNAL_EVENT_LOGGER_H_

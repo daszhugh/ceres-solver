@@ -68,9 +68,9 @@ CERES_SRCS = ["internal/ceres/" + filename for filename in [
     "eigensparse.cc",
     "evaluation_callback.cc",
     "evaluator.cc",
+    "event_logger.cc",
     "file.cc",
     "first_order_function.cc",
-    "float_suitesparse.cc",
     "function_sample.cc",
     "gradient_checker.cc",
     "gradient_checking_cost_function.cc",
@@ -121,7 +121,6 @@ CERES_SRCS = ["internal/ceres/" + filename for filename in [
     "sparse_cholesky.cc",
     "sparse_matrix.cc",
     "sparse_normal_cholesky_solver.cc",
-    "stringprintf.cc",
     "subset_preconditioner.cc",
     "suitesparse.cc",
     "thread_pool.cc",
@@ -134,7 +133,6 @@ CERES_SRCS = ["internal/ceres/" + filename for filename in [
     "types.cc",
     "visibility_based_preconditioner.cc",
     "visibility.cc",
-    "wall_time.cc",
 ]]
 
 # TODO(rodrigoq): add support to configure Ceres into various permutations,
@@ -215,6 +213,12 @@ def ceres_library(
         deps = [
             "@eigen//:eigen",
             "@abseil-cpp//absl/log",
+            "@abseil-cpp//absl/container:fixed_array",
+            "@abseil-cpp//absl/container:flat_hash_map",
+            "@abseil-cpp//absl/container:flat_hash_set",
+            "@abseil-cpp//absl/strings",
+            "@abseil-cpp//absl/time",
+            "@abseil-cpp//absl/container:btree",
             "@abseil-cpp//absl/log:check",
         ],
     )

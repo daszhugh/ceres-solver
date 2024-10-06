@@ -30,15 +30,30 @@
 
 # Build the list of dependencies for Ceres based on the current configuration.
 
-# Avoid 'xxx.cc has no symbols' warnings from source files which are 'empty'
-# when their enclosing #ifdefs are disabled.
 find_package(Threads REQUIRED)
 list(APPEND CERES_LIBRARY_PRIVATE_DEPENDENCIES Threads::Threads)
 # Make dependency visible to the parent CMakeLists.txt
 set(Threads_DEPENDENCY "find_dependency (Threads)" PARENT_SCOPE)
 
+# Generator expressions were introduced in CMake version 3.24. Without
+# them including absl::log_flags as an internal dependency causes
+# linking problems on some platforms. So for platforms with an older
+# CMake version we make absl::log_flags a public dependency.
+if(CMAKE_VERSION VERSION_LESS "3.24.0")
+  list(APPEND CERES_LIBRARY_PUBLIC_DEPENDENCIES  absl::log_flags)
+else()
+  list(APPEND CERES_LIBRARY_PRIVATE_DEPENDENCIES  $<LINK_LIBRARY:WHOLE_ARCHIVE,absl::log_flags>)
+endif()
+
+list(APPEND CERES_LIBRARY_PRIVATE_DEPENDENCIES absl::strings)
+list(APPEND CERES_LIBRARY_PRIVATE_DEPENDENCIES absl::time)
+list(APPEND CERES_LIBRARY_PRIVATE_DEPENDENCIES absl::flat_hash_map)
+list(APPEND CERES_LIBRARY_PRIVATE_DEPENDENCIES absl::flat_hash_set)
+list(APPEND CERES_LIBRARY_PRIVATE_DEPENDENCIES absl::btree)
+
 list(APPEND CERES_LIBRARY_PUBLIC_DEPENDENCIES absl::log)
 list(APPEND CERES_LIBRARY_PUBLIC_DEPENDENCIES absl::check)
+list(APPEND CERES_LIBRARY_PUBLIC_DEPENDENCIES absl::fixed_array)
 
 # Source files that contain public symbols and live in the ceres namespaces.
 # Such symbols are expected to be marked with CERES_EXPORT and the files below
@@ -168,10 +183,10 @@ add_library(ceres_internal OBJECT
     eigensparse.cc
     evaluation_callback.cc
     evaluator.cc
+    event_logger.cc
     fake_bundle_adjustment_jacobian.cc
     file.cc
     first_order_function.cc
-    float_suitesparse.cc
     function_sample.cc
     gradient_checking_cost_function.cc
     gradient_problem_solver.cc
@@ -215,7 +230,6 @@ add_library(ceres_internal OBJECT
     sparse_cholesky.cc
     sparse_matrix.cc
     sparse_normal_cholesky_solver.cc
-    stringprintf.cc
     subset_preconditioner.cc
     suitesparse.cc
     thread_pool.cc
@@ -227,7 +241,6 @@ add_library(ceres_internal OBJECT
     trust_region_strategy.cc
     visibility.cc
     visibility_based_preconditioner.cc
-    wall_time.cc
 )
 
 set(CERES_LIBRARY_SOURCE
@@ -351,18 +364,6 @@ install(TARGETS ceres
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 if (BUILD_TESTING)
-  # Now that we have absl as a dependency, it would make sense to tell
-  # googletest to use absl also, but doing so seems to be problematic
-  # for now, since if there is a version of absl and re2 installed in
-  # the system then we start getting errors because we maybe using the
-  # absl from our submodule, but the re2 installed on the system only
-  # sees the absl installed on the system. It is possible that we will
-  # need to include re2 as a submodule also, for the following to
-  # work.
-
-  # set(GTEST_HAS_ABSL ON CACHE BOOL "Use ABSL when building gtest")
-  add_subdirectory(${Ceres_SOURCE_DIR}/third_party/googletest ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/googletest)
-
   add_library(test_util STATIC
               evaluator_test_utils.cc
               numeric_diff_test_utils.cc
@@ -450,7 +451,6 @@ if (BUILD_TESTING)
   ceres_test(dynamic_sparsity)
   ceres_test(evaluation_callback)
   ceres_test(evaluator)
-  ceres_test(fixed_array)
   ceres_test(gradient_checker)
   ceres_test(gradient_checking_cost_function)
   ceres_test(gradient_problem)
