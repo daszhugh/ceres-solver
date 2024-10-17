@@ -62,7 +62,7 @@ class TripletSparseMatrix;
 // for all cholmod function calls.
 class CERES_NO_EXPORT SuiteSparse {
  public:
-  explicit SuiteSparse(bool use_gpu);
+  explicit SuiteSparse(bool use_gpu, size_t max_gpu_mem_mbs = 1000);
   ~SuiteSparse();
 
   bool UseGPU() const { return cc_.useGPU; }

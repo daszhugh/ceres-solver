@@ -37,6 +37,11 @@
 #include <string>
 #include <vector>
 
+#ifndef CERES_NO_CUDA
+#include <cuda.h>
+#include <cuda_runtime.h>
+#endif
+
 #include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/log/vlog_is_on.h"
@@ -86,11 +91,35 @@ void CopyArrayToInt32(size_t size, const void* src, void* dst) {
 
 }  // namespace
 
-SuiteSparse::SuiteSparse(bool use_gpu) {
+SuiteSparse::SuiteSparse(bool use_gpu, size_t max_gpu_mem_mbs) {
   if (use_gpu) {
-    cholmod_l_start(&cc_);
-    cc_.useGPU = 1;
+#ifndef CERES_NO_CUDA
+
+    size_t free_mem = 0, total_mem = 0;
+    auto cuda_error = cudaMemGetInfo(&free_mem, &total_mem);
+
+    if (cuda_error == cudaSuccess && free_mem > 0 && max_gpu_mem_mbs > 0) {
+      free_mem = std::min(free_mem, max_gpu_mem_mbs * 1024 * 1024);
+    } else {
+      free_mem = 0;
+    }
+
+    if (free_mem > 300 * 1024 * 1024) {
+      cholmod_l_start(&cc_);
+      cc_.useGPU = 1;
+      cc_.supernodal = CHOLMOD_AUTO;
+      cc_.maxGpuMemBytes = free_mem * 0.6;
+      cc_.maxGpuMemFraction = 0.6;
+    } else {
+      cholmod_start(&cc_);
+      cc_.useGPU = 0;
+      cc_.supernodal = CHOLMOD_AUTO;
+    }
+#else
+    cholmod_start(&cc_);
+    cc_.useGPU = 0;
     cc_.supernodal = CHOLMOD_AUTO;
+#endif  // !CERES_NO_CUDA
   } else {
     cholmod_start(&cc_);
     cc_.useGPU = 0;
