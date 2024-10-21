@@ -202,6 +202,8 @@ class CERES_NO_EXPORT PartitionedMatrixView final
   int num_cols_f_;
   std::vector<int> e_cols_partition_;
   std::vector<int> f_cols_partition_;
+
+  mutable std::vector<std::vector<double>> caches_;
 };
 
 }  // namespace ceres::internal
