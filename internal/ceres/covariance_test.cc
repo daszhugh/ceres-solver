@@ -31,8 +31,8 @@
 #include "ceres/covariance.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <memory>
 #include <utility>
@@ -44,9 +44,11 @@
 #include "ceres/cost_function.h"
 #include "ceres/covariance_impl.h"
 #include "ceres/internal/config.h"
+#include "ceres/internal/eigen.h"
 #include "ceres/manifold.h"
 #include "ceres/map_util.h"
 #include "ceres/problem_impl.h"
+#include "ceres/types.h"
 #include "gtest/gtest.h"
 
 namespace ceres {

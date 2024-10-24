@@ -34,9 +34,9 @@
 #include <memory>
 #include <type_traits>
 
+#include "absl/container/fixed_array.h"
 #include "ceres/first_order_function.h"
 #include "ceres/internal/eigen.h"
-#include "ceres/internal/fixed_array.h"
 #include "ceres/jet.h"
 #include "ceres/types.h"
 
@@ -91,7 +91,7 @@ namespace ceres {
 //
 //    FirstOrderFunction* function =
 //      new AutoDiffFirstOrderFunction<QuadraticCostFunctor, 4>(
-//          new QuadraticCostFunctor(1.0)));
+//          std::make_unique<QuadraticCostFunctor>(1.0)));
 //
 // In the instantiation above, the template parameters following
 // "QuadraticCostFunctor", "4", describe the functor as computing a
@@ -105,10 +105,13 @@ namespace ceres {
 template <typename FirstOrderFunctor, int kNumParameters>
 class AutoDiffFirstOrderFunction final : public FirstOrderFunction {
  public:
-  // Takes ownership of functor.
-  explicit AutoDiffFirstOrderFunction(FirstOrderFunctor* functor)
-      : AutoDiffFirstOrderFunction{
-            std::unique_ptr<FirstOrderFunctor>{functor}} {}
+  AutoDiffFirstOrderFunction(const AutoDiffFirstOrderFunction&) = delete;
+  AutoDiffFirstOrderFunction& operator=(const AutoDiffFirstOrderFunction&) =
+      delete;
+  AutoDiffFirstOrderFunction(AutoDiffFirstOrderFunction&& other) noexcept =
+      default;
+  AutoDiffFirstOrderFunction& operator=(
+      AutoDiffFirstOrderFunction&& other) noexcept = default;
 
   explicit AutoDiffFirstOrderFunction(
       std::unique_ptr<FirstOrderFunctor> functor)
@@ -131,7 +134,7 @@ class AutoDiffFirstOrderFunction final : public FirstOrderFunction {
     }
 
     using JetT = Jet<double, kNumParameters>;
-    internal::FixedArray<JetT, (256 * 7) / sizeof(JetT)> x(kNumParameters);
+    absl::FixedArray<JetT, (256 * 7) / sizeof(JetT)> x(kNumParameters);
     for (int i = 0; i < kNumParameters; ++i) {
       x[i].a = parameters[i];
       x[i].v.setZero();

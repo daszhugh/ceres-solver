@@ -1,5 +1,5 @@
 // Ceres Solver - A fast non-linear least squares minimizer
-// Copyright 2023 Google Inc. All rights reserved.
+// Copyright 2024 Google Inc. All rights reserved.
 // http://ceres-solver.org/
 //
 // Redistribution and use in source and binary forms, with or without
@@ -26,34 +26,53 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 //
-// Author: sameeragarwal@google.com (Sameer Agarwal)
+// Author: strandmark@google.com (Petter Strandmark)
 
-#ifndef CERES_INTERNAL_FLOAT_SUITESPARSE_H_
-#define CERES_INTERNAL_FLOAT_SUITESPARSE_H_
+#include "ceres/event_logger.h"
 
-// This include must come before any #ifndef check on Ceres compile options.
-// clang-format off
-#include "ceres/internal/config.h"
-// clang-format on
+#include <string>
+#include <string_view>
 
-#include <memory>
-
-#include "ceres/internal/export.h"
-#include "ceres/sparse_cholesky.h"
-
-#if !defined(CERES_NO_SUITESPARSE)
+#include "absl/log/log.h"
+#include "absl/log/vlog_is_on.h"
+#include "absl/strings/str_format.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 
 namespace ceres::internal {
 
-// Fake implementation of a single precision Sparse Cholesky using
-// SuiteSparse.
-class CERES_NO_EXPORT FloatSuiteSparseCholesky : public SparseCholesky {
- public:
-  static std::unique_ptr<SparseCholesky> Create(OrderingType ordering_type);
-};
+EventLogger::EventLogger(std::string_view logger_name)
+    : start_time_(absl::Now()) {
+  if (!VLOG_IS_ON(3)) {
+    return;
+  }
+
+  last_event_time_ = start_time_;
+  events_ = absl::StrFormat(
+      "\n%s\n                                        Delta   Cumulative\n",
+      logger_name);
+}
+
+EventLogger::~EventLogger() {
+  if (!VLOG_IS_ON(3)) {
+    return;
+  }
+  AddEvent("Total");
+  VLOG(3) << "\n" << events_ << "\n";
+}
+
+void EventLogger::AddEvent(std::string_view event_name) {
+  if (!VLOG_IS_ON(3)) {
+    return;
+  }
+
+  const absl::Time now = absl::Now();
+  absl::StrAppendFormat(&events_,
+                        "  %30s : %10.5f   %10.5f\n",
+                        event_name,
+                        absl::ToDoubleSeconds(now - last_event_time_),
+                        absl::ToDoubleSeconds(now - start_time_));
+  last_event_time_ = now;
+}
 
 }  // namespace ceres::internal
-
-#endif  // !defined(CERES_NO_SUITESPARSE)
-
-#endif  // CERES_INTERNAL_FLOAT_SUITESPARSE_H_

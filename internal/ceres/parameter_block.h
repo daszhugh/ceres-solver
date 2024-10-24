@@ -37,16 +37,16 @@
 #include <limits>
 #include <memory>
 #include <string>
-#include <unordered_set>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/log/check.h"
 #include "absl/log/log.h"
+#include "absl/strings/str_format.h"
 #include "ceres/array_utils.h"
 #include "ceres/internal/disable_warnings.h"
 #include "ceres/internal/eigen.h"
 #include "ceres/internal/export.h"
 #include "ceres/manifold.h"
-#include "ceres/stringprintf.h"
 
 namespace ceres::internal {
 
@@ -64,7 +64,7 @@ class ResidualBlock;
 // proper disposal of the manifold.
 class CERES_NO_EXPORT ParameterBlock {
  public:
-  using ResidualBlockSet = std::unordered_set<ResidualBlock*>;
+  using ResidualBlockSet = absl::flat_hash_set<ResidualBlock*>;
 
   // Create a parameter block with the user state, size, and index specified.
   // The size is the size of the parameter block and the index is the position
@@ -252,7 +252,7 @@ class CERES_NO_EXPORT ParameterBlock {
   }
 
   std::string ToString() const {
-    return StringPrintf(
+    return absl::StrFormat(
         "{ this=%p, user_state=%p, state=%p, size=%d, "
         "constant=%d, index=%d, state_offset=%d, "
         "delta_offset=%d }",

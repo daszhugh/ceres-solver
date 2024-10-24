@@ -31,12 +31,12 @@
 #ifndef CERES_INTERNAL_SCHUR_ELIMINATOR_H_
 #define CERES_INTERNAL_SCHUR_ELIMINATOR_H_
 
-#include <map>
 #include <memory>
 #include <mutex>
 #include <vector>
 
 #include "Eigen/Dense"
+#include "absl/container/btree_map.h"
 #include "absl/log/check.h"
 #include "ceres/block_random_access_matrix.h"
 #include "ceres/block_sparse_matrix.h"
@@ -84,7 +84,7 @@ namespace ceres::internal {
 //
 // The rows of A are ordered so that for every variable block in y,
 // all the rows containing that variable block occur as a vertically
-// contiguous block. i.e the matrix A looks like
+// contiguous block. i.e. the matrix A looks like
 //
 //              E                 F                   chunk
 //  A = [ y1   0   0   0 |  z1    0    0   0    z5]     1
@@ -136,7 +136,7 @@ namespace ceres::internal {
 //  1. E'E is a block diagonal matrix.
 //
 //  2. When E'F is computed, only the terms within a single chunk
-//  interact, i.e for y1 column blocks when transposed and multiplied
+//  interact, i.e. for y1 column blocks when transposed and multiplied
 //  with F, the only non-zero contribution comes from the blocks in
 //  chunk1.
 //
@@ -274,7 +274,7 @@ class CERES_NO_EXPORT SchurEliminator final : public SchurEliminatorBase {
   // buffer_layout[z1] = 0
   // buffer_layout[z5] = y1 * z1
   // buffer_layout[z2] = y1 * z1 + y1 * z5
-  using BufferLayoutType = std::map<int, int>;
+  using BufferLayoutType = absl::btree_map<int, int>;
   struct Chunk {
     explicit Chunk(int start) : size(0), start(start) {}
     int size;

@@ -34,22 +34,21 @@
 #include <cmath>
 #include <ctime>
 #include <memory>
-#include <set>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "absl/container/btree_set.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "ceres/block_structure.h"
 #include "ceres/graph.h"
-#include "ceres/pair_hash.h"
 
 namespace ceres::internal {
 
 void ComputeVisibility(const CompressedRowBlockStructure& block_structure,
                        const int num_eliminate_blocks,
-                       std::vector<std::set<int>>* visibility) {
+                       std::vector<absl::btree_set<int>>* visibility) {
   CHECK(visibility != nullptr);
 
   // Clear the visibility vector and resize it to hold a
@@ -75,7 +74,7 @@ void ComputeVisibility(const CompressedRowBlockStructure& block_structure,
 }
 
 std::unique_ptr<WeightedGraph<int>> CreateSchurComplementGraph(
-    const std::vector<std::set<int>>& visibility) {
+    const std::vector<absl::btree_set<int>>& visibility) {
   const time_t start_time = time(nullptr);
   // Compute the number of e_blocks/point blocks. Since the visibility
   // set for each e_block/camera contains the set of e_blocks/points
@@ -92,9 +91,9 @@ std::unique_ptr<WeightedGraph<int>> CreateSchurComplementGraph(
   // cameras. However, to compute the sparsity structure of the Schur
   // Complement efficiently, its better to have the point->camera
   // mapping.
-  std::vector<std::set<int>> inverse_visibility(num_points);
+  std::vector<absl::btree_set<int>> inverse_visibility(num_points);
   for (int i = 0; i < visibility.size(); i++) {
-    const std::set<int>& visibility_set = visibility[i];
+    const absl::btree_set<int>& visibility_set = visibility[i];
     for (int v : visibility_set) {
       inverse_visibility[v].insert(i);
     }
@@ -102,7 +101,7 @@ std::unique_ptr<WeightedGraph<int>> CreateSchurComplementGraph(
 
   // Map from camera pairs to number of points visible to both cameras
   // in the pair.
-  std::unordered_map<std::pair<int, int>, int, pair_hash> camera_pairs;
+  absl::flat_hash_map<std::pair<int, int>, int> camera_pairs;
 
   // Count the number of points visible to each camera/f_block pair.
   for (const auto& inverse_visibility_set : inverse_visibility) {

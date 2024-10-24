@@ -33,12 +33,12 @@
 #include <algorithm>
 #include <ctime>
 #include <memory>
-#include <set>
 #include <utility>
 #include <vector>
 
 #include "Eigen/Dense"
 #include "Eigen/SparseCore"
+#include "absl/container/btree_set.h"
 #include "absl/log/check.h"
 #include "ceres/block_random_access_dense_matrix.h"
 #include "ceres/block_random_access_matrix.h"
@@ -47,12 +47,12 @@
 #include "ceres/block_structure.h"
 #include "ceres/conjugate_gradients_solver.h"
 #include "ceres/detect_structure.h"
+#include "ceres/event_logger.h"
 #include "ceres/internal/eigen.h"
 #include "ceres/linear_solver.h"
 #include "ceres/sparse_cholesky.h"
 #include "ceres/triplet_sparse_matrix.h"
 #include "ceres/types.h"
-#include "ceres/wall_time.h"
 
 namespace ceres::internal {
 namespace {
@@ -229,7 +229,7 @@ void SparseSchurComplementSolver::InitStorage(
 
   blocks_ = Tail(bs->cols, num_col_blocks - num_eliminate_blocks);
 
-  std::set<std::pair<int, int>> block_pairs;
+  absl::btree_set<std::pair<int, int>> block_pairs;
   for (int i = 0; i < blocks_.size(); ++i) {
     block_pairs.emplace(i, i);
   }

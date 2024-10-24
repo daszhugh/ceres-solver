@@ -39,6 +39,7 @@
 #include <vector>
 
 #include "Eigen/SparseCore"
+#include "absl/strings/str_format.h"
 #include "ceres/internal/config.h"
 #include "ceres/internal/export.h"
 #include "ceres/ordered_groups.h"
@@ -218,7 +219,7 @@ bool ApplyOrdering(const ProblemImpl::ParameterMap& parameter_map,
                    std::string* error) {
   const int num_parameter_blocks = program->NumParameterBlocks();
   if (ordering.NumElements() != num_parameter_blocks) {
-    *error = StringPrintf(
+    *error = absl::StrFormat(
         "User specified ordering does not have the same "
         "number of parameters as the problem. The problem"
         "has %d blocks while the ordering has %d blocks.",
@@ -239,7 +240,7 @@ bool ApplyOrdering(const ProblemImpl::ParameterMap& parameter_map,
     for (double* parameter_block_ptr : group) {
       auto it = parameter_map.find(parameter_block_ptr);
       if (it == parameter_map.end()) {
-        *error = StringPrintf(
+        *error = absl::StrFormat(
             "User specified ordering contains a pointer "
             "to a double that is not a parameter block in "
             "the problem. The invalid double is in group: %d",
@@ -452,7 +453,7 @@ bool ReorderProgramForSchurTypeLinearSolver(
     std::string* error) {
   if (parameter_block_ordering->NumElements() !=
       program->NumParameterBlocks()) {
-    *error = StringPrintf(
+    *error = absl::StrFormat(
         "The program has %d parameter blocks, but the parameter block "
         "ordering has %d parameter blocks.",
         program->NumParameterBlocks(),
@@ -461,7 +462,7 @@ bool ReorderProgramForSchurTypeLinearSolver(
   }
 
   if (parameter_block_ordering->NumGroups() == 1) {
-    // If the user supplied an parameter_block_ordering with just one
+    // If the user supplied a parameter_block_ordering with just one
     // group, it is equivalent to the user supplying nullptr as an
     // parameter_block_ordering. Ceres is completely free to choose the
     // parameter block ordering as it sees fit. For Schur type solvers,
@@ -496,7 +497,7 @@ bool ReorderProgramForSchurTypeLinearSolver(
     const std::set<double*>& first_elimination_group =
         parameter_block_ordering->group_to_elements().begin()->second;
     if (!program->IsParameterBlockSetIndependent(first_elimination_group)) {
-      *error = StringPrintf(
+      *error = absl::StrFormat(
           "The first elimination group in the parameter block "
           "ordering of size %zd is not an independent set",
           first_elimination_group.size());
@@ -546,7 +547,7 @@ bool ReorderProgramForSparseCholesky(
     Program* program,
     std::string* error) {
   if (parameter_block_ordering.NumElements() != program->NumParameterBlocks()) {
-    *error = StringPrintf(
+    *error = absl::StrFormat(
         "The program has %d parameter blocks, but the parameter block "
         "ordering has %d parameter blocks.",
         program->NumParameterBlocks(),

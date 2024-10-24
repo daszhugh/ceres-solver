@@ -31,6 +31,12 @@
 
 #include "ceres/internal/array_selector.h"
 
+#include <array>
+#include <type_traits>
+#include <vector>
+
+#include "absl/container/fixed_array.h"
+#include "ceres/types.h"
 #include "gtest/gtest.h"
 
 namespace ceres::internal {
@@ -41,12 +47,12 @@ namespace ceres::internal {
 TEST(ArraySelector, FixedArray) {
   ArraySelector<int, DYNAMIC, 20> array1(10);
   static_assert(
-      std::is_base_of<internal::FixedArray<int, 20>, decltype(array1)>::value);
+      std::is_base_of<absl::FixedArray<int, 20>, decltype(array1)>::value);
   EXPECT_EQ(array1.size(), 10);
 
   ArraySelector<int, DYNAMIC, 10> array2(20);
   static_assert(
-      std::is_base_of<internal::FixedArray<int, 10>, decltype(array2)>::value);
+      std::is_base_of<absl::FixedArray<int, 10>, decltype(array2)>::value);
   EXPECT_EQ(array2.size(), 20);
 }
 

@@ -36,9 +36,11 @@
 
 #include "absl/log/check.h"
 #include "absl/log/log.h"
+#include "absl/strings/str_format.h"
 #include "ceres/callbacks.h"
 #include "ceres/context_impl.h"
 #include "ceres/evaluator.h"
+#include "ceres/event_logger.h"
 #include "ceres/linear_solver.h"
 #include "ceres/minimizer.h"
 #include "ceres/parameter_block.h"
@@ -49,7 +51,7 @@
 #include "ceres/reorder_program.h"
 #include "ceres/suitesparse.h"
 #include "ceres/trust_region_strategy.h"
-#include "ceres/wall_time.h"
+#include "ceres/types.h"
 
 namespace ceres::internal {
 
@@ -91,17 +93,17 @@ void AlternateLinearSolverAndPreconditionerForSchurTypeLinearSolver(
     options->preconditioner_type =
         Preconditioner::PreconditionerForZeroEBlocks(preconditioner_type_given);
 
-    message =
-        StringPrintf("No E blocks. Switching from %s(%s) to %s(%s).",
-                     LinearSolverTypeToString(linear_solver_type_given),
-                     PreconditionerTypeToString(preconditioner_type_given),
-                     LinearSolverTypeToString(options->linear_solver_type),
-                     PreconditionerTypeToString(options->preconditioner_type));
+    message = absl::StrFormat(
+        "No E blocks. Switching from %s(%s) to %s(%s).",
+        LinearSolverTypeToString(linear_solver_type_given),
+        PreconditionerTypeToString(preconditioner_type_given),
+        LinearSolverTypeToString(options->linear_solver_type),
+        PreconditionerTypeToString(options->preconditioner_type));
   } else {
     message =
-        StringPrintf("No E blocks. Switching from %s to %s.",
-                     LinearSolverTypeToString(linear_solver_type_given),
-                     LinearSolverTypeToString(options->linear_solver_type));
+        absl::StrFormat("No E blocks. Switching from %s to %s.",
+                        LinearSolverTypeToString(linear_solver_type_given),
+                        LinearSolverTypeToString(options->linear_solver_type));
   }
   if (options->logging_type != SILENT) {
     VLOG(1) << message;
@@ -376,19 +378,22 @@ bool SetupMinimizerOptions(PreprocessedProblem* pp) {
 bool TrustRegionPreprocessor::Preprocess(const Solver::Options& options,
                                          ProblemImpl* problem,
                                          PreprocessedProblem* pp) {
+  EventLogger event_logger("TrustRegionPreprocessor::Preprocess");
   CHECK(pp != nullptr);
   pp->options = options;
   ChangeNumThreadsIfNeeded(&pp->options);
 
   pp->problem = problem;
   Program* program = problem->mutable_program();
-  if (!IsProgramValid(*program, &pp->error)) {
+  bool status = IsProgramValid(*program, &pp->error);
+  event_logger.AddEvent("IsProgramValid");
+  if (!status) {
     return false;
   }
 
   pp->reduced_program = program->CreateReducedProgram(
       &pp->removed_parameter_blocks, &pp->fixed_cost, &pp->error);
-
+  event_logger.AddEvent("CreateReducedProgram");
   if (pp->reduced_program.get() == nullptr) {
     return false;
   }
@@ -399,12 +404,27 @@ bool TrustRegionPreprocessor::Preprocess(const Solver::Options& options,
     return true;
   }
 
-  if (!SetupLinearSolver(pp) || !SetupEvaluator(pp) ||
-      !SetupInnerIterationMinimizer(pp)) {
+  status = SetupLinearSolver(pp);
+  event_logger.AddEvent("SetupLinearSolver");
+  if (!status) {
     return false;
   }
 
-  return SetupMinimizerOptions(pp);
+  status = SetupEvaluator(pp);
+  event_logger.AddEvent("SetupEvaluator");
+  if (!status) {
+    return false;
+  }
+
+  status = SetupInnerIterationMinimizer(pp);
+  event_logger.AddEvent("SetupInnerIterations");
+  if (!status) {
+    return false;
+  }
+
+  status = SetupMinimizerOptions(pp);
+  event_logger.AddEvent("SetupMinimizerOptions");
+  return status;
 }
 
 }  // namespace ceres::internal

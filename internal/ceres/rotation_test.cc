@@ -39,13 +39,13 @@
 #include <utility>
 
 #include "absl/log/log.h"
+#include "absl/strings/str_format.h"
 #include "ceres/constants.h"
 #include "ceres/internal/eigen.h"
 #include "ceres/internal/euler_angles.h"
 #include "ceres/internal/export.h"
 #include "ceres/is_close.h"
 #include "ceres/jet.h"
-#include "ceres/stringprintf.h"
 #include "ceres/test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -81,7 +81,7 @@ MATCHER(IsNormalizedQuaternion, "") {
 // double actual_quaternion[4];
 // EXPECT_THAT(actual_quaternion, IsNearQuaternion(expected_quaternion));
 MATCHER_P(IsNearQuaternion, expected, "") {
-  // Quaternions are equivalent upto a sign change. So we will compare
+  // Quaternions are equivalent up to a sign change. So we will compare
   // both signs before declaring failure.
   bool is_near = true;
   // NOTE: near (and far) can be defined as macros on the Windows platform (for
@@ -495,11 +495,11 @@ TEST(Rotation, AtPiAngleAxisRoundTrip) {
   for (int i = 0; i < 3; ++i) {
     std::string line;
     for (int j = 0; j < 3; ++j) {
-      StringAppendF(&line, "%g ", kMatrix[i][j]);
+      absl::StrAppendFormat(&line, "%g ", kMatrix[i][j]);
     }
     line += "         |        ";
     for (int j = 0; j < 3; ++j) {
-      StringAppendF(&line, "%g ", out_rowmajor[i][j]);
+      absl::StrAppendFormat(&line, "%g ", out_rowmajor[i][j]);
     }
     LOG(INFO) << line;
   }
