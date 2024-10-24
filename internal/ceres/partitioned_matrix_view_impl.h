@@ -331,25 +331,25 @@ void PartitionedMatrixView<kRowBlockSize, kEBlockSize, kFBlockSize>::
     int num_cols_f = num_cols_f_;
     int num_row_blocks_e = num_row_blocks_e_;
 
-    if (caches_.size() != options_.num_threads - 1) {
-      caches_.resize(options_.num_threads - 1);
-    }
-
-    auto& caches = caches_;
-
     absl::FixedArray<double*> y_ptrs(options_.num_threads);
     y_ptrs[0] = y;
 
-    ParallelFor(options_.context,
-                0,
-                options_.num_threads - 1,
-                options_.num_threads - 1,
-                [num_cols_f, &caches, &y_ptrs](int i) {
-                  auto& cache = caches[i];
-                  cache.reserve(num_cols_f);
-                  VectorRef(cache.data(), num_cols_f).setZero();
-                  y_ptrs[i + 1] = cache.data();
-                });
+    if (options_.num_threads > 1) {
+      if (caches_.size() != options_.num_threads - 1) {
+        caches_.resize(options_.num_threads - 1);
+      }
+      auto& caches = caches_;
+      ParallelFor(options_.context,
+                  0,
+                  options_.num_threads - 1,
+                  options_.num_threads - 1,
+                  [num_cols_f, &caches, &y_ptrs](int i) {
+                    auto& cache = caches[i];
+                    cache.reserve(num_cols_f);
+                    VectorRef(cache.data(), num_cols_f).setZero();
+                    y_ptrs[i + 1] = cache.data();
+                  });
+    }
 
     auto bs = matrix_.block_structure();
     CHECK(bs != nullptr);
@@ -387,10 +387,6 @@ void PartitionedMatrixView<kRowBlockSize, kEBlockSize, kFBlockSize>::
                  y_ptr + col_block_pos - num_cols_e);
               // clang-format on
             }
-          }
-
-          if (end << num_row_blocks_e) {
-            return;
           }
 
           for (int r = num_row_blocks_e; r < end; ++r) {
