@@ -104,11 +104,11 @@ bool BuildJacobianLayout(const Program& program,
     }
 
     std::vector<std::tuple<int, int, int>> efj;
-    efj.reserve((residual_blocks.size() + kminblocks - 1) / kminblocks);
+    efj.reserve((residual_blocks.size() + kMinBlocks - 1) / kMinBlocks);
     int e_block_idx = 0;
     int jacobian_idx = 0;
     for (size_t i = 0; i < residual_blocks.size(); ++i) {
-      if (i % kminblocks == 0) {
+      if (i % kMinBlocks == 0) {
         efj.emplace_back(e_block_idx, f_block_idx, jacobian_idx);
       }
       auto residual_block = residual_blocks[i];
@@ -154,8 +154,8 @@ bool BuildJacobianLayout(const Program& program,
           auto& active_parameter_blocks = parameter_blocks[thread_id];
 
           auto [e_block_pos, f_block_pos, jacobian_idx] = efj[efj_idx];
-          int begin = efj_idx * kminblocks;
-          int end = std::min(begin + kminblocks, (int)residual_blocks.size());
+          int begin = efj_idx * kMinBlocks;
+          int end = std::min(begin + kMinBlocks, (int)residual_blocks.size());
           auto jacobian_ptr = jacobian_data + jacobian_idx;
           for (int i = begin; i < end; ++i) {
             const auto residual_block = residual_blocks[i];
