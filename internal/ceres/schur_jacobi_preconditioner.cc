@@ -37,6 +37,7 @@
 #include "absl/log/check.h"
 #include "ceres/block_random_access_diagonal_matrix.h"
 #include "ceres/block_sparse_matrix.h"
+#include "ceres/event_logger.h"
 #include "ceres/linear_solver.h"
 #include "ceres/schur_eliminator.h"
 
@@ -86,13 +87,17 @@ void SchurJacobiPreconditioner::InitEliminator(
 // Update the values of the preconditioner matrix and factorize it.
 bool SchurJacobiPreconditioner::UpdateImpl(const BlockSparseMatrix& A,
                                            const double* D) {
+  EventLogger event_logger("SchurJacobiPreconditioner::UpdateImpl");
+
   const int num_rows = m_->num_rows();
   CHECK_GT(num_rows, 0);
 
   // Compute a subset of the entries of the Schur complement.
   eliminator_->Eliminate(
       BlockSparseMatrixData(A), nullptr, D, m_.get(), nullptr);
+  event_logger.AddEvent("Eliminate");
   m_->Invert();
+  event_logger.AddEvent("Invert");
   return true;
 }
 

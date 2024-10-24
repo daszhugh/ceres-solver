@@ -79,8 +79,10 @@ LinearSolver::Summary IterativeSchurComplementSolver::SolveImpl(
     options_.f_block_size = f_block_size_;
 
     schur_complement_ = std::make_unique<ImplicitSchurComplement>(options_);
+    event_logger.AddEvent("Create schur");
   }
   schur_complement_->Init(*A, per_solve_options.D, b);
+  event_logger.AddEvent("Init schur");
 
   const int num_schur_complement_blocks =
       A->block_structure()->cols.size() - num_eliminate_blocks;
@@ -96,6 +98,7 @@ LinearSolver::Summary IterativeSchurComplementSolver::SolveImpl(
   // Initialize the solution to the Schur complement system.
   reduced_linear_system_solution_.resize(schur_complement_->num_rows());
   reduced_linear_system_solution_.setZero();
+  event_logger.AddEvent("Init x and scratch");
   if (options_.use_spse_initialization) {
     Preconditioner::Options preconditioner_options(options_);
     preconditioner_options.type = SCHUR_POWER_SERIES_EXPANSION;
@@ -107,9 +110,11 @@ LinearSolver::Summary IterativeSchurComplementSolver::SolveImpl(
     pse_solver.RightMultiplyAndAccumulate(
         schur_complement_->rhs().data(),
         reduced_linear_system_solution_.data());
+    event_logger.AddEvent("Create PreSolver");
   }
 
   CreatePreconditioner(A);
+  event_logger.AddEvent("Create preconditioner");
   if (preconditioner_ != nullptr) {
     if (!preconditioner_->Update(*A, per_solve_options.D)) {
       LinearSolver::Summary summary;
@@ -118,6 +123,7 @@ LinearSolver::Summary IterativeSchurComplementSolver::SolveImpl(
       summary.message = "Preconditioner update failed.";
       return summary;
     }
+    event_logger.AddEvent("Update preconditioner");
   }
 
   ConjugateGradientsSolverOptions cg_options;
@@ -145,11 +151,13 @@ LinearSolver::Summary IterativeSchurComplementSolver::SolveImpl(
                                preconditioner,
                                scratch_ptr,
                                reduced_linear_system_solution_);
+  event_logger.AddEvent("Reduced solve");
 
   if (summary.termination_type != LinearSolverTerminationType::FAILURE &&
       summary.termination_type != LinearSolverTerminationType::FATAL_ERROR) {
     schur_complement_->BackSubstitute(reduced_linear_system_solution_.data(),
                                       x);
+    event_logger.AddEvent("Back substitute");
   }
   event_logger.AddEvent("Solve");
   return summary;

@@ -40,6 +40,7 @@
 
 #include "Eigen/SparseCore"
 #include "absl/strings/str_format.h"
+#include "ceres/event_logger.h"
 #include "ceres/internal/config.h"
 #include "ceres/internal/export.h"
 #include "ceres/ordered_groups.h"
@@ -341,6 +342,7 @@ bool LexicographicallyOrderResidualBlocks(
 // possible.
 static void ReorderSchurComplementColumnsUsingSuiteSparse(
     const ParameterBlockOrdering& parameter_block_ordering, Program* program) {
+  EventLogger event_logger("ReorderSchurComplementColumnsUsingSuiteSparse");
 #ifdef CERES_NO_SUITESPARSE
   // "Void"ing values to avoid compiler warnings about unused parameters
   (void)parameter_block_ordering;
@@ -350,35 +352,43 @@ static void ReorderSchurComplementColumnsUsingSuiteSparse(
   std::vector<int> constraints;
   std::vector<ParameterBlock*>& parameter_blocks =
       *(program->mutable_parameter_blocks());
-
+  constraints.reserve(parameter_blocks.size());
   for (auto* parameter_block : parameter_blocks) {
     constraints.push_back(parameter_block_ordering.GroupId(
         parameter_block->mutable_user_state()));
   }
+  event_logger.AddEvent("Compute constraints");
 
   // Renumber the entries of constraints to be contiguous integers as
   // CAMD requires that the group ids be in the range [0,
   // parameter_blocks.size() - 1].
   MapValuesToContiguousRange(constraints.size(), constraints.data());
+  event_logger.AddEvent("MapValuesToContiguousRange");
 
   // Compute a block sparse presentation of J'.
   std::unique_ptr<TripletSparseMatrix> tsm_block_jacobian_transpose(
       program->CreateJacobianBlockSparsityTranspose());
+  event_logger.AddEvent("CreateJacobianBlockSparsityTranspose");
 
   cholmod_sparse* block_jacobian_transpose =
       ss.CreateSparseMatrix(tsm_block_jacobian_transpose.get());
+  event_logger.AddEvent("CreateSparseMatrix");
 
   std::vector<int> ordering(parameter_blocks.size(), 0);
   ss.ConstrainedApproximateMinimumDegreeOrdering(
       block_jacobian_transpose, constraints.data(), ordering.data());
+  event_logger.AddEvent("ConstrainedApproximateMinimumDegreeOrdering");
   ss.Free(block_jacobian_transpose);
+  event_logger.AddEvent("SuiteSparse::Free");
 
   const std::vector<ParameterBlock*> parameter_blocks_copy(parameter_blocks);
   for (int i = 0; i < program->NumParameterBlocks(); ++i) {
     parameter_blocks[i] = parameter_blocks_copy[ordering[i]];
   }
+  event_logger.AddEvent("Update parameter_blocks");
 
   program->SetParameterOffsetsAndIndex();
+  event_logger.AddEvent("Program::SetParameterOffsetsAndIndex");
 #endif
 }
 
@@ -386,6 +396,7 @@ static void ReorderSchurComplementColumnsUsingSuiteSparse(
 // possible.
 static void ReorderSchurComplementColumnsUsingCUDASparse(
     const ParameterBlockOrdering& parameter_block_ordering, Program* program) {
+  EventLogger event_logger("ReorderSchurComplementColumnsUsingSuiteSparse");
 #ifdef CERES_NO_SUITESPARSE
   // "Void"ing values to avoid compiler warnings about unused parameters
   (void)parameter_block_ordering;
@@ -395,35 +406,43 @@ static void ReorderSchurComplementColumnsUsingCUDASparse(
   std::vector<int> constraints;
   std::vector<ParameterBlock*>& parameter_blocks =
       *(program->mutable_parameter_blocks());
-
+  constraints.reserve(parameter_blocks.size());
   for (auto* parameter_block : parameter_blocks) {
     constraints.push_back(parameter_block_ordering.GroupId(
         parameter_block->mutable_user_state()));
   }
+  event_logger.AddEvent("Compute constraints");
 
   // Renumber the entries of constraints to be contiguous integers as
   // CAMD requires that the group ids be in the range [0,
   // parameter_blocks.size() - 1].
   MapValuesToContiguousRange(constraints.size(), constraints.data());
+  event_logger.AddEvent("MapValuesToContiguousRange");
 
   // Compute a block sparse presentation of J'.
   std::unique_ptr<TripletSparseMatrix> tsm_block_jacobian_transpose(
       program->CreateJacobianBlockSparsityTranspose());
+  event_logger.AddEvent("CreateJacobianBlockSparsityTranspose");
 
   cholmod_sparse* block_jacobian_transpose =
       ss.CreateSparseMatrix(tsm_block_jacobian_transpose.get());
+  event_logger.AddEvent("CreateSparseMatrix");
 
   std::vector<int> ordering(parameter_blocks.size(), 0);
   ss.ConstrainedApproximateMinimumDegreeOrdering(
       block_jacobian_transpose, constraints.data(), ordering.data());
+  event_logger.AddEvent("ConstrainedApproximateMinimumDegreeOrdering");
   ss.Free(block_jacobian_transpose);
+  event_logger.AddEvent("SuiteSparse::Free");
 
   const std::vector<ParameterBlock*> parameter_blocks_copy(parameter_blocks);
   for (int i = 0; i < program->NumParameterBlocks(); ++i) {
     parameter_blocks[i] = parameter_blocks_copy[ordering[i]];
   }
+  event_logger.AddEvent("Update parameter_blocks");
 
   program->SetParameterOffsetsAndIndex();
+  event_logger.AddEvent("Program::SetParameterOffsetsAndIndex");
 #endif
 }
 
@@ -497,6 +516,8 @@ bool ReorderProgramForSchurTypeLinearSolver(
     ParameterBlockOrdering* parameter_block_ordering,
     Program* program,
     std::string* error) {
+  EventLogger event_logger("ReorderProgramForSchurTypeLinearSolver");
+
   if (parameter_block_ordering->NumElements() !=
       program->NumParameterBlocks()) {
     *error = absl::StrFormat(
@@ -518,6 +539,8 @@ bool ReorderProgramForSchurTypeLinearSolver(
     const int size_of_first_elimination_group =
         ComputeStableSchurOrdering(*program, &schur_ordering);
 
+    event_logger.AddEvent("ComputeStableSchurOrdering");
+
     CHECK_EQ(schur_ordering.size(), program->NumParameterBlocks())
         << "Congratulations, you found a Ceres bug! Please report this error "
         << "to the developers.";
@@ -532,6 +555,7 @@ bool ReorderProgramForSchurTypeLinearSolver(
     // We could call ApplyOrdering but this is cheaper and
     // simpler.
     std::swap(*program->mutable_parameter_blocks(), schur_ordering);
+    event_logger.AddEvent("ApplyOrdering");
   } else {
     // The user provided an ordering with more than one elimination
     // group.
@@ -554,9 +578,11 @@ bool ReorderProgramForSchurTypeLinearSolver(
             parameter_map, *parameter_block_ordering, program, error)) {
       return false;
     }
+    event_logger.AddEvent("ApplyOrdering");
   }
 
   program->SetParameterOffsetsAndIndex();
+  event_logger.AddEvent("SetParameterOffsetsAndIndex");
 
   const int size_of_first_elimination_group =
       parameter_block_ordering->group_to_elements().begin()->second.size();
@@ -571,24 +597,31 @@ bool ReorderProgramForSchurTypeLinearSolver(
       // nested dissection too.
       ReorderSchurComplementColumnsUsingSuiteSparse(*parameter_block_ordering,
                                                     program);
+      event_logger.AddEvent("ReorderSchurComplementColumnsUsingSuiteSparse");
     } else if (sparse_linear_algebra_library_type == CUDA_SPARSE &&
                linear_solver_ordering_type == ceres::AMD) {
       // Preordering support for schur complement only works with AMD
       // for now, since we are using CAMD.
       ReorderSchurComplementColumnsUsingCUDASparse(*parameter_block_ordering,
                                                    program);
+      event_logger.AddEvent("ReorderSchurComplementColumnsUsingCUDASparse");
     } else if (sparse_linear_algebra_library_type == EIGEN_SPARSE) {
       ReorderSchurComplementColumnsUsingEigen(linear_solver_ordering_type,
                                               size_of_first_elimination_group,
                                               parameter_map,
                                               program);
+      event_logger.AddEvent("ReorderSchurComplementColumnsUsingEigen");
     }
   }
 
   // Schur type solvers also require that their residual blocks be
   // lexicographically ordered.
-  return LexicographicallyOrderResidualBlocks(
-      size_of_first_elimination_group, program, error);
+  if (!LexicographicallyOrderResidualBlocks(
+          size_of_first_elimination_group, program, error)) {
+    return false;
+  }
+  event_logger.AddEvent("LexicographicallyOrderResidualBlocks");
+  return true;
 }
 
 bool ReorderProgramForSparseCholesky(

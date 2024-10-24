@@ -160,6 +160,7 @@ bool ReorderProgram(PreprocessedProblem* pp) {
 // find a fill reducing ordering and reorder the program as needed
 // too.
 bool SetupLinearSolver(PreprocessedProblem* pp) {
+  EventLogger event_logger("SetupLinearSolver");
   Solver::Options& options = pp->options;
   pp->linear_solver_options = LinearSolver::Options();
 
@@ -170,6 +171,7 @@ bool SetupLinearSolver(PreprocessedProblem* pp) {
     // putting all the parameter blocks in the same elimination group.
     options.linear_solver_ordering =
         CreateDefaultLinearSolverOrdering(*pp->reduced_program);
+    event_logger.AddEvent("CreateDefaultLinearSolverOrdering");
   } else {
     // If the user supplied an ordering, then check if the first
     // elimination group is still non-empty after the reduced problem
@@ -196,6 +198,7 @@ bool SetupLinearSolver(PreprocessedProblem* pp) {
   if (!ReorderProgram(pp)) {
     return false;
   }
+  event_logger.AddEvent("ReorderProgram");
 
   // Configure the linear solver.
   pp->linear_solver_options.use_suitesparse_gpu = options.use_suitesparse_gpu;
@@ -230,6 +233,7 @@ bool SetupLinearSolver(PreprocessedProblem* pp) {
   if (IsSchurType(pp->linear_solver_options.type)) {
     OrderingToGroupSizes(options.linear_solver_ordering.get(),
                          &pp->linear_solver_options.elimination_groups);
+    event_logger.AddEvent("OrderingToGroupSizes");
 
     // Schur type solvers expect at least two elimination groups. If
     // there is only one elimination group, then it is guaranteed that
@@ -246,6 +250,7 @@ bool SetupLinearSolver(PreprocessedProblem* pp) {
                                 options.sparse_linear_algebra_library_type,
                                 options.linear_solver_ordering_type)) {
     pp->linear_solver_options.ordering_type = OrderingType::NATURAL;
+    event_logger.AddEvent("AreJacobianColumnsOrdered");
   } else {
     if (options.linear_solver_ordering_type == ceres::AMD) {
       pp->linear_solver_options.ordering_type = OrderingType::AMD;
@@ -259,11 +264,13 @@ bool SetupLinearSolver(PreprocessedProblem* pp) {
   }
 
   pp->linear_solver = LinearSolver::Create(pp->linear_solver_options);
+  event_logger.AddEvent("LinearSolver::Create");
   return (pp->linear_solver != nullptr);
 }
 
 // Configure and create the evaluator.
 bool SetupEvaluator(PreprocessedProblem* pp) {
+  EventLogger event_logger("SetupEvaluator");
   const Solver::Options& options = pp->options;
   pp->evaluator_options = Evaluator::Options();
   pp->evaluator_options.linear_solver_type = options.linear_solver_type;
@@ -284,6 +291,7 @@ bool SetupEvaluator(PreprocessedProblem* pp) {
       pp->reduced_program->mutable_evaluation_callback();
   pp->evaluator = Evaluator::Create(
       pp->evaluator_options, pp->reduced_program.get(), &pp->error);
+  event_logger.AddEvent("Evaluator::Create");
 
   return (pp->evaluator != nullptr);
 }
@@ -344,11 +352,14 @@ bool SetupInnerIterationMinimizer(PreprocessedProblem* pp) {
 // Configure and create a TrustRegionMinimizer object.
 bool SetupMinimizerOptions(PreprocessedProblem* pp) {
   const Solver::Options& options = pp->options;
-
+  EventLogger event_logger("SetupMinimizerOptions");
   SetupCommonMinimizerOptions(pp);
+  event_logger.AddEvent("SetupCommonMinimizerOptions");
   pp->minimizer_options.is_constrained =
       pp->reduced_program->IsBoundsConstrained();
+  event_logger.AddEvent("Program::IsBoundsConstrained");
   pp->minimizer_options.jacobian = pp->evaluator->CreateJacobian();
+  event_logger.AddEvent("Evaluator::CreateJacobian");
   if (pp->minimizer_options.jacobian == nullptr) {
     pp->error =
         "Unable to create Jacobian matrix. Likely because it is too large.";
@@ -371,6 +382,7 @@ bool SetupMinimizerOptions(PreprocessedProblem* pp) {
   strategy_options.num_threads = options.num_threads;
   pp->minimizer_options.trust_region_strategy =
       TrustRegionStrategy::Create(strategy_options);
+  event_logger.AddEvent("TrustRegionStrategy::Create");
   CHECK(pp->minimizer_options.trust_region_strategy != nullptr);
   return true;
 }
@@ -442,6 +454,7 @@ bool TrustRegionPreprocessor::Preprocess(const Solver::Options& options,
     pp->linear_solver->UpdateStructure(pp->linear_solver_options.row_block_size,
                                        pp->linear_solver_options.e_block_size,
                                        pp->linear_solver_options.f_block_size);
+    event_logger.AddEvent("DetectStructure");
   }
 
   return true;
