@@ -38,8 +38,10 @@
 #include "absl/log/log.h"
 #include "ceres/block_evaluate_preparer.h"
 #include "ceres/block_sparse_matrix.h"
+#include "ceres/event_logger.h"
 #include "ceres/internal/eigen.h"
 #include "ceres/internal/export.h"
+#include "ceres/parallel_for.h"
 #include "ceres/parameter_block.h"
 #include "ceres/program.h"
 #include "ceres/residual_block.h"
@@ -47,6 +49,8 @@
 namespace ceres::internal {
 
 namespace {
+
+const int kMinBlocks = 10000;
 
 // Given the residual block ordering, build a lookup table to determine which
 // per-parameter jacobian goes where in the overall program jacobian.
@@ -68,7 +72,148 @@ namespace {
 bool BuildJacobianLayout(const Program& program,
                          int num_eliminate_blocks,
                          std::vector<int*>* jacobian_layout,
-                         std::vector<int>* jacobian_layout_storage) {
+                         std::vector<int>* jacobian_layout_storage,
+                         ContextImpl* context,
+                         int num_threads) {
+  if (num_threads > 1 && program.residual_blocks().size() > 2 * kMinBlocks) {
+    const auto& residual_blocks = program.residual_blocks();
+    unsigned f_block_idx = 0;
+    unsigned num_jacobian_blocks = 0;
+    for (size_t i = 0; i < residual_blocks.size(); ++i) {
+      auto residual_block = residual_blocks[i];
+      const int num_residuals = residual_block->NumResiduals();
+      const int num_parameter_blocks = residual_block->NumParameterBlocks();
+
+      // Advance f_block_pos over each E block for this residual.
+      for (int j = 0; j < num_parameter_blocks; ++j) {
+        auto parameter_block = residual_block->parameter_blocks()[j];
+        if (!parameter_block->IsConstant()) {
+          // Only count blocks for active parameters.
+          num_jacobian_blocks++;
+          if (parameter_block->index() < num_eliminate_blocks) {
+            f_block_idx += num_residuals * parameter_block->TangentSize();
+          }
+        }
+      }
+      if (num_jacobian_blocks > std::numeric_limits<int>::max()) {
+        LOG(ERROR)
+            << "Overflow error. Too many blocks in the jacobian matrix : "
+            << num_jacobian_blocks;
+        return false;
+      }
+    }
+
+    std::vector<std::tuple<int, int, int>> efj;
+    efj.reserve((residual_blocks.size() + kminblocks - 1) / kminblocks);
+    int e_block_idx = 0;
+    int jacobian_idx = 0;
+    for (size_t i = 0; i < residual_blocks.size(); ++i) {
+      if (i % kminblocks == 0) {
+        efj.emplace_back(e_block_idx, f_block_idx, jacobian_idx);
+      }
+      auto residual_block = residual_blocks[i];
+      const int num_residuals = residual_block->NumResiduals();
+      const int num_parameter_blocks = residual_block->NumParameterBlocks();
+
+      // Advance f_block_pos over each E block for this residual.
+      for (int j = 0; j < num_parameter_blocks; ++j) {
+        auto parameter_block = residual_block->parameter_blocks()[j];
+        if (!parameter_block->IsConstant()) {
+          // Only count blocks for active parameters.
+          const int jacobian_block_size =
+              num_residuals * parameter_block->TangentSize();
+          if (parameter_block->index() < num_eliminate_blocks) {
+            e_block_idx += jacobian_block_size;
+          } else {
+            f_block_idx += jacobian_block_size;
+          }
+          ++jacobian_idx;
+        }
+      }
+
+      if (f_block_idx > std::numeric_limits<int>::max()) {
+        LOG(ERROR) << "Overflow error. Too many entries in the "
+                      "Jacobian matrix.";
+        return false;
+      }
+    }
+
+    // We now know that the E blocks are laid out starting at zero, and the F
+    // blocks are laid out starting at f_block_pos. Iterate over the residual
+    // blocks again, and this time fill the jacobian_layout array with the
+    // position information.
+
+    jacobian_layout->resize(program.NumResidualBlocks());
+    jacobian_layout_storage->resize(num_jacobian_blocks);
+
+    int* jacobian_data = jacobian_layout_storage->data();
+
+    std::vector<std::vector<std::pair<int, int>>> parameter_blocks(num_threads);
+    ParallelFor(
+        context, 0, efj.size(), num_threads, [&](int thread_id, int efj_idx) {
+          auto& active_parameter_blocks = parameter_blocks[thread_id];
+
+          auto [e_block_pos, f_block_pos, jacobian_idx] = efj[efj_idx];
+          int begin = efj_idx * kminblocks;
+          int end = std::min(begin + kminblocks, (int)residual_blocks.size());
+          auto jacobian_ptr = jacobian_data + jacobian_idx;
+          for (int i = begin; i < end; ++i) {
+            const auto residual_block = residual_blocks[i];
+            const int num_residuals = residual_block->NumResiduals();
+            const int num_parameter_blocks =
+                residual_block->NumParameterBlocks();
+
+            (*jacobian_layout)[i] = jacobian_ptr;
+            // Cells from F sub-matrix are to be stored sequentially with
+            // increasing column block id. For each non-constant parameter
+            // block, a pair of indices (index in the list of active parameter
+            // blocks and index in the list of all parameter blocks) is
+            // computed, and index pairs are sorted by the index of
+            // corresponding column block id.
+            active_parameter_blocks.clear();
+            active_parameter_blocks.reserve(num_parameter_blocks);
+            for (int j = 0; j < num_parameter_blocks; ++j) {
+              auto parameter_block = residual_block->parameter_blocks()[j];
+              if (parameter_block->IsConstant()) {
+                continue;
+              }
+              const int k = active_parameter_blocks.size();
+              active_parameter_blocks.emplace_back(k, j);
+            }
+
+            std::sort(
+                active_parameter_blocks.begin(),
+                active_parameter_blocks.end(),
+                [&residual_block](const std::pair<int, int>& a,
+                                  const std::pair<int, int>& b) {
+                  return residual_block->parameter_blocks()[a.second]->index() <
+                         residual_block->parameter_blocks()[b.second]->index();
+                });
+
+            // Cell positions for each active parameter block are filled in the
+            // order of active parameter block indices sorted by columnd block
+            // index. This guarantees that cells are laid out sequentially with
+            // increasing column block indices.
+            for (const auto& indices : active_parameter_blocks) {
+              const auto [k, j] = indices;
+              auto parameter_block = residual_block->parameter_blocks()[j];
+              const int parameter_block_index = parameter_block->index();
+              const int jacobian_block_size =
+                  num_residuals * parameter_block->TangentSize();
+              if (parameter_block_index < num_eliminate_blocks) {
+                jacobian_ptr[k] = e_block_pos;
+                e_block_pos += jacobian_block_size;
+              } else {
+                jacobian_ptr[k] = static_cast<int>(f_block_pos);
+                f_block_pos += jacobian_block_size;
+              }
+            }
+            jacobian_ptr += active_parameter_blocks.size();
+          }
+        });
+    return true;
+  }
+
   const std::vector<ResidualBlock*>& residual_blocks =
       program.residual_blocks();
 
@@ -173,11 +318,13 @@ BlockJacobianWriter::BlockJacobianWriter(const Evaluator::Options& options,
     : options_(options), program_(program) {
   CHECK_GE(options.num_eliminate_blocks, 0)
       << "num_eliminate_blocks must be greater than 0.";
-
+  EventLogger event_logger("BlockJacobianWriter::BuildJacobianLayout");
   jacobian_layout_is_valid_ = BuildJacobianLayout(*program,
                                                   options.num_eliminate_blocks,
                                                   &jacobian_layout_,
-                                                  &jacobian_layout_storage_);
+                                                  &jacobian_layout_storage_,
+                                                  options_.context,
+                                                  options_.num_threads);
 }
 
 // Create evaluate preparers that point directly into the final jacobian. This
@@ -188,7 +335,7 @@ BlockJacobianWriter::CreateEvaluatePreparers(unsigned num_threads) {
       program_->MaxDerivativesPerResidualBlock();
 
   auto preparers = std::make_unique<BlockEvaluatePreparer[]>(num_threads);
-  for (unsigned i = 0; i < num_threads; i++) {
+  for (int i = 0; i < num_threads; ++i) {
     preparers[i].Init(jacobian_layout_.data(),
                       max_derivatives_per_residual_block);
   }
@@ -201,62 +348,83 @@ std::unique_ptr<SparseMatrix> BlockJacobianWriter::CreateJacobian() const {
                   "Jacobian matrix.";
     return nullptr;
   }
+  EventLogger event_logger("BlockJacobianWriter::CreateJacobian");
+  auto bs = new CompressedRowBlockStructure;
 
-  auto* bs = new CompressedRowBlockStructure;
+  const auto& parameter_blocks = program_->parameter_blocks();
+  const auto& residual_blocks = program_->residual_blocks();
 
-  const std::vector<ParameterBlock*>& parameter_blocks =
-      program_->parameter_blocks();
+  ParallelFor(options_.context, 0, 2, 2, [&](int idx) {
+    if (idx == 0) {
+      // Construct the column blocks.
+      bs->cols.resize(parameter_blocks.size());
+      for (int i = 0, cursor = 0; i < parameter_blocks.size(); ++i) {
+        CHECK_NE(parameter_blocks[i]->index(), -1);
+        CHECK(!parameter_blocks[i]->IsConstant());
+        auto col = &bs->cols[i];
 
-  // Construct the column blocks.
-  bs->cols.resize(parameter_blocks.size());
-  for (int i = 0, cursor = 0; i < parameter_blocks.size(); ++i) {
-    CHECK_NE(parameter_blocks[i]->index(), -1);
-    CHECK(!parameter_blocks[i]->IsConstant());
-    bs->cols[i].size = parameter_blocks[i]->TangentSize();
-    bs->cols[i].position = cursor;
-    cursor += bs->cols[i].size;
-  }
-
-  // Construct the cells in each row.
-  const std::vector<ResidualBlock*>& residual_blocks =
-      program_->residual_blocks();
-  int row_block_position = 0;
-  bs->rows.resize(residual_blocks.size());
-  for (int i = 0; i < residual_blocks.size(); ++i) {
-    const ResidualBlock* residual_block = residual_blocks[i];
-    CompressedRow* row = &bs->rows[i];
-
-    row->block.size = residual_block->NumResiduals();
-    row->block.position = row_block_position;
-    row_block_position += row->block.size;
-
-    // Size the row by the number of active parameters in this residual.
-    const int num_parameter_blocks = residual_block->NumParameterBlocks();
-    int num_active_parameter_blocks = 0;
-    for (int j = 0; j < num_parameter_blocks; ++j) {
-      if (residual_block->parameter_blocks()[j]->index() != -1) {
-        num_active_parameter_blocks++;
-      }
-    }
-    row->cells.resize(num_active_parameter_blocks);
-
-    // Add layout information for the active parameters in this row.
-    for (int j = 0, k = 0; j < num_parameter_blocks; ++j) {
-      const ParameterBlock* parameter_block =
-          residual_block->parameter_blocks()[j];
-      if (!parameter_block->IsConstant()) {
-        Cell& cell = row->cells[k];
-        cell.block_id = parameter_block->index();
-        cell.position = jacobian_layout_[i][k];
-
-        // Only increment k for active parameters, since there is only layout
-        // information for active parameters.
-        k++;
+        col->size = parameter_blocks[i]->TangentSize();
+        col->position = cursor;
+        cursor += col->size;
       }
     }
 
-    std::sort(row->cells.begin(), row->cells.end(), CellLessThan);
-  }
+    if (idx == 1) {
+      // Construct the cells in each row.
+      int row_block_position = 0;
+      bs->rows.resize(residual_blocks.size());
+      for (int i = 0; i < residual_blocks.size(); ++i) {
+        const auto residual_block = residual_blocks[i];
+        auto row = &bs->rows[i];
+
+        row->block.size = residual_block->NumResiduals();
+        row->block.position = row_block_position;
+        row_block_position += row->block.size;
+      }
+    }
+  });
+
+  ParallelFor(
+      options_.context,
+      0,
+      residual_blocks.size(),
+      options_.num_threads,
+      [&](const std::tuple<int, int>& range) {
+        auto [begin, end] = range;
+        for (int i = begin; i < end; ++i) {
+          const auto residual_block = residual_blocks[i];
+          auto row = &bs->rows[i];
+
+          // Size the row by the number of active parameters in this
+          // residual.
+          const int num_parameter_blocks = residual_block->NumParameterBlocks();
+          int num_active_parameter_blocks = 0;
+          for (int j = 0; j < num_parameter_blocks; ++j) {
+            if (!residual_block->parameter_blocks()[j]->IsConstant()) {
+              num_active_parameter_blocks++;
+            }
+          }
+          row->cells.resize(num_active_parameter_blocks);
+
+          // Add layout information for the active parameters in this
+          // row.
+          for (int j = 0, k = 0; j < num_parameter_blocks; ++j) {
+            const auto parameter_block = residual_block->parameter_blocks()[j];
+            if (!parameter_block->IsConstant()) {
+              auto& cell = row->cells[k];
+              cell.block_id = parameter_block->index();
+              cell.position = jacobian_layout_[i][k];
+
+              // Only increment k for active parameters, since there is
+              // only layout information for active parameters.
+              k++;
+            }
+          }
+
+          std::sort(row->cells.begin(), row->cells.end(), CellLessThan);
+        }
+      },
+      kMinBlocks);
 
   return std::make_unique<BlockSparseMatrix>(
       bs, options_.sparse_linear_algebra_library_type == CUDA_SPARSE);
